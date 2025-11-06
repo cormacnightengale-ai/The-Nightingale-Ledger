@@ -2,7 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 import { 
     getAuth, 
     signInAnonymously, 
-    signInWithCustomToken, 
     onAuthStateChanged,
     setPersistence,
     browserLocalPersistence
@@ -21,10 +20,20 @@ import {
 setLogLevel('debug');
 
 
-// --- Global Variables (Provided by Canvas Environment) ---
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-shared-ledger';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+// --- Global Variables (Hardcoded Firebase Configuration) ---
+// Configuration from user-provided firebase_config.js
+const firebaseConfig = {
+  apiKey: "AIzaSyAdmOIlbRx6uvgZiNat-BYI5GH-lvkiEqc",
+  authDomain: "nightingaleledger-4627.firebaseapp.com",
+  projectId: "nightingaleledger-4627",
+  storageBucket: "nightingaleledger-4627.firebasestorage.app",
+  messagingSenderId: "299188208241",
+  appId: "1:299188208241:web:7bb086293357f4ec4691d0",
+  measurementId: "G-5WLM6RZQ0Y"
+};
+
+// Use projectId as the unique identifier for the shared ledger data
+const appId = firebaseConfig.projectId;
 
 // --- Firebase/App State ---
 let app;
@@ -33,9 +42,10 @@ let auth;
 let userId = null;
 let isInitialized = false; 
 
-// Path for public/shared data: artifacts/{appId}/public/data/ledger_state/{docId}
+// Path for public/shared data: ledgers/{projectId}/data/ledger_state/{docId}
+// This path is chosen to be consistent and non-Canvas specific.
 const GAME_STATE_DOC_ID = 'ledger_data';
-const GAME_STATE_PATH = `artifacts/${appId}/public/data/ledger_state/${GAME_STATE_DOC_ID}`;
+const GAME_STATE_PATH = `ledgers/${appId}/data/ledger_state/${GAME_STATE_DOC_ID}`;
 
 // Default Game State structure (Now using P1 and P2 for reciprocity)
 let gameState = {
@@ -59,7 +69,6 @@ let gameState = {
  * Custom modal implementation for alerts and notices.
  */
 function showModal(title, message, isConfirm = false) {
-    // ... (Modal implementation remains the same)
     const modal = document.getElementById('custom-modal');
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-message').textContent = message;
@@ -147,9 +156,6 @@ function renderState() {
 
     document.getElementById('p1-score').textContent = gameState.scores.p1;
     document.getElementById('p2-score').textContent = gameState.scores.p2;
-    
-    document.getElementById('current-user-id').textContent = userId || 'N/A';
-    document.getElementById('current-app-id').textContent = appId;
     
     // 2. Render Habits
     const habitsList = document.getElementById('habits-list');
@@ -253,9 +259,8 @@ function renderState() {
 // --- Firebase Initialization ---
 
 async function initFirebase() {
-    // ... (Firebase initialization code remains the same)
-    if (!firebaseConfig) {
-        const errorMsg = "FATAL ERROR: Firebase configuration data is missing. Please ensure the global `__firebase_config` is defined.";
+    if (!firebaseConfig.apiKey) {
+        const errorMsg = "FATAL ERROR: Firebase API key is missing. Please check the configuration.";
         document.getElementById('auth-error-message').textContent = errorMsg;
         console.error(errorMsg);
         return;
@@ -266,13 +271,11 @@ async function initFirebase() {
         db = getFirestore(app);
         auth = getAuth(app);
         
+        // Use local persistence to keep the anonymous sign-in session
         await setPersistence(auth, browserLocalPersistence);
 
-        if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-        } else {
-            await signInAnonymously(auth);
-        }
+        // Sign in anonymously for shared, public access to the Firestore document
+        await signInAnonymously(auth);
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -283,7 +286,7 @@ async function initFirebase() {
                 }
             } else {
                 userId = null;
-                document.getElementById('auth-error-message').textContent = "Signed out. Waiting for authentication...";
+                document.getElementById('auth-error-message').textContent = "Signed out. Please refresh to attempt connection.";
             }
         });
 
@@ -297,6 +300,7 @@ async function initFirebase() {
 function setupRealtimeListener() {
     const docRef = doc(db, GAME_STATE_PATH);
     
+    // Check if document exists and initialize if not
     getDoc(docRef).then(docSnap => {
         if (!docSnap.exists()) {
             console.log("No ledger data found. Initializing new state...");
@@ -307,9 +311,11 @@ function setupRealtimeListener() {
         showModal("Connection Error", "Failed to check ledger data existence.");
     });
 
+    // Setup real-time listener
     onSnapshot(docRef, (doc) => {
         if (doc.exists()) {
             const data = doc.data();
+            // Merge existing state with fetched data to maintain defaults if fields are missing
             gameState = {
                 ...gameState,
                 ...data,
@@ -323,7 +329,7 @@ function setupRealtimeListener() {
                 scores: { p1: 0, p2: 0 },
                 habits: [], rewards: [], punishments: [], history: []
             };
-            saveState();
+            saveState(); // Re-initialize the document
         }
         renderState();
     }, (error) => {
@@ -586,7 +592,14 @@ window.showHistoryModal = function() {
     if (gameState.history.length === 0) {
         historyList.innerHTML = '<p class="text-center py-4 text-gray-500 italic">No transactions recorded yet.</p>';
     } else {
-        gameState.history.forEach(item => {
+        // Sort history by timestamp (most recent first, as unshift is used to add new items)
+        const sortedHistory = [...gameState.history].sort((a, b) => {
+            const dateA = a.timestamp && a.timestamp.toDate ? a.timestamp.toDate().getTime() : 0;
+            const dateB = b.timestamp && b.timestamp.toDate ? b.timestamp.toDate().getTime() : 0;
+            return dateB - dateA; // Descending order
+        });
+
+        sortedHistory.forEach(item => {
             const playerInfo = getPlayerInfo(item.player);
             const isReward = item.type === 'reward';
             const textClass = isReward ? 'text-p2' : 'text-p1';
@@ -594,6 +607,7 @@ window.showHistoryModal = function() {
             const itemElement = document.createElement('div');
             itemElement.className = `p-3 rounded-lg flex justify-between items-center border-l-4 ${isReward ? 'border-p2' : 'border-p1'} bg-[#1a1a1d]`;
             
+            // Note: serverTimestamp() objects have a toDate() method. 
             const date = item.timestamp && item.timestamp.toDate ? item.timestamp.toDate().toLocaleString() : 'Processing...';
 
             itemElement.innerHTML = `
@@ -619,15 +633,15 @@ window.hideHistoryModal = function() {
 }
 
 /**
- * Inserts a random example. (Assumes EXAMPLE_DATABASE is global)
+ * Inserts a random example. (Assumes EXAMPLE_DATABASE is globally defined in examples.js)
  */
 window.generateExample = function(type) {
-    if (typeof EXAMPLE_DATABASE === 'undefined' || !EXAMPLE_DATABASE[type + 's']) {
-        showModal("Error", "Example data is not loaded correctly.");
+    if (typeof EXAMPLE_DATABASE === 'undefined' || !EXAMPLE_DATABASE[`${type}s`]) {
+        showModal("Error", "Example data is not loaded correctly. Check examples.js.");
         return;
     }
     
-    const examples = EXAMPLE_DATABASE[type + 's'];
+    const examples = EXAMPLE_DATABASE[`${type}s`];
     const randomIndex = Math.floor(Math.random() * examples.length);
     const example = examples[randomIndex];
 
@@ -635,9 +649,11 @@ window.generateExample = function(type) {
         document.getElementById('new-habit-desc').value = example.description;
         document.getElementById('new-habit-points').value = example.points;
         document.getElementById('new-habit-times').value = 1;
-        // Example habits were 'keeper'/'nightingale', map them to 'p1'/'p2'
+        
+        // Map old 'keeper'/'nightingale' types to new 'p1'/'p2'
         const assignee = example.type === 'keeper' ? 'p1' : 'p2'; 
         document.getElementById('new-habit-assignee').value = assignee;
+        
         if (document.getElementById('habit-form').classList.contains('hidden')) { window.toggleForm('habit'); }
     } else if (type === 'reward') {
         document.getElementById('new-reward-title').value = example.title;
