@@ -40,7 +40,7 @@
         .btn-primary:hover {
             background-color: #d47e8c;
             transform: translateY(-1px);
-            box-shadow: 0 2px 5px rgba (0, 0, 0, 0.3);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
         }
         .btn-secondary {
             background-color: #3c3c45;
@@ -89,7 +89,7 @@
             <!-- Host New Ledger -->
             <div class="mb-6">
                 <p class="text-gray-300 mb-2">Start a new shared ledger and get a unique code.</p>
-                <button onclick="hostNewLedger()" class="btn-primary w-full text-base rounded-lg font-sans font-semibold">
+                <button onclick="window.hostNewLedger()" class="btn-primary w-full text-base rounded-lg font-sans font-semibold">
                     Host New Ledger
                 </button>
             </div>
@@ -99,7 +99,7 @@
                 
                 <input type="text" id="join-code-input" placeholder="Enter 6-digit Ledger Code (e.g., A5B1C2)" maxlength="6" class="w-full p-3 mb-3 text-center uppercase tracking-widest bg-[#1a1a1d] border border-[#3c3c45] rounded-lg text-white font-mono text-lg">
                 
-                <button onclick="joinExistingLedger()" class="btn-secondary w-full text-base rounded-lg font-sans font-semibold">
+                <button onclick="window.joinExistingLedger()" class="btn-secondary w-full text-base rounded-lg font-sans font-semibold">
                     Join Ledger
                 </button>
             </div>
@@ -118,7 +118,7 @@
             <label for="player2-input" class="block text-sm mb-1 text-gray-400">User 2 (Nightingale Role)</label>
             <input type="text" id="player2-input" placeholder="e.g., Jamie" class="w-full p-3 mb-4 bg-[#1a1a1d] border border-[#3c3c45] rounded-lg text-white">
 
-            <button onclick="savePlayerNames()" class="btn-primary w-full rounded-lg font-sans font-semibold">
+            <button onclick="window.savePlayerNames()" class="btn-primary w-full rounded-lg font-sans font-semibold">
                 Save Names
             </button>
         </div>
@@ -139,7 +139,7 @@
                 <p class="text-xs text-gray-400 uppercase tracking-widest">Ledger Code (Share this!)</p>
                 <p class="text-3xl md:text-4xl font-bold font-mono text-[#d47e8c] break-all mt-1" id="current-ledger-code">...loading</p>
             </div>
-            <button onclick="showNameConfigModal()" class="btn-secondary mt-3 md:mt-0 p-2 text-sm rounded-lg font-semibold shadow-lg">
+            <button onclick="window.showNameConfigModal()" class="btn-secondary mt-3 md:mt-0 p-2 text-sm rounded-lg font-semibold shadow-lg">
                 Rename Users
             </button>
         </div>
@@ -165,14 +165,14 @@
             <section class="lg:col-span-2">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-2xl md:text-3xl">Habits & Daily Tasks</h2>
-                    <button onclick="toggleHabitForm()" class="btn-primary text-sm rounded-lg font-semibold shadow-lg">
-                        + Add Task
+                    <button onclick="window.toggleHabitForm()" class="btn-primary text-sm rounded-lg font-semibold shadow-lg">
+                        + Add Habit
                     </button>
                 </div>
                 
                 <!-- Habit Add Form -->
                 <div id="habit-form" class="card p-4 rounded-xl mb-6 hidden">
-                    <h3 class="text-lg mb-3 text-white">Create a New Task</h3>
+                    <h3 class="text-lg mb-3 text-white">Create a New Habit</h3>
                     <input type="text" id="new-habit-desc" placeholder="Habit description (e.g., Daily workout)" class="w-full p-3 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-lg text-white">
                     <div class="flex flex-col sm:flex-row sm:space-x-3 mb-3 space-y-3 sm:space-y-0">
                         <input type="number" id="new-habit-points" placeholder="Points (e.g., 10)" class="w-full sm:w-1/3 p-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-lg text-white" value="10">
@@ -181,7 +181,7 @@
                             <option value="nightingale">Assign to User 2</option>
                         </select>
                     </div>
-                    <button onclick="addHabit()" class="btn-primary rounded-lg font-sans font-semibold w-full">Add Habit</button>
+                    <button onclick="window.addHabit()" class="btn-primary rounded-lg font-sans font-semibold w-full">Add Habit</button>
                 </div>
 
                 <!-- Habit List -->
@@ -196,7 +196,7 @@
                 <!-- REWARDS -->
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-2xl md:text-3xl">Rewards</h2>
-                    <button onclick="toggleRewardForm()" class="btn-secondary text-sm rounded-lg font-semibold shadow-lg">
+                    <button onclick="window.toggleRewardForm()" class="btn-secondary text-sm rounded-lg font-semibold shadow-lg">
                         + Define
                     </button>
                 </div>
@@ -207,7 +207,7 @@
                     <input type="text" id="new-reward-title" placeholder="Title (e.g., A Massage)" class="w-full p-3 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-lg text-white">
                     <input type="number" id="new-reward-cost" placeholder="Cost (Points)" class="w-full p-3 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-lg text-white" value="50">
                     <textarea id="new-reward-desc" placeholder="Detailed description..." class="w-full p-3 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-lg text-white h-20"></textarea>
-                    <button onclick="addReward()" class="btn-primary rounded-lg font-sans font-semibold w-full">Define Reward</button>
+                    <button onclick="window.addReward()" class="btn-primary rounded-lg font-sans font-semibold w-full">Define Reward</button>
                 </div>
 
                 <!-- Reward List -->
@@ -218,7 +218,7 @@
                 <!-- PUNISHMENTS -->
                 <div class="flex justify-between items-center mb-4 mt-8">
                     <h2 class="text-2xl md:text-3xl">Punishments</h2>
-                    <button onclick="togglePunishmentForm()" class="btn-secondary text-sm rounded-lg font-semibold shadow-lg">
+                    <button onclick="window.togglePunishmentForm()" class="btn-secondary text-sm rounded-lg font-semibold shadow-lg">
                         + Define
                     </button>
                 </div>
@@ -228,7 +228,7 @@
                     <h3 class="text-lg mb-3 text-white">Define New Punishment</h3>
                     <input type="text" id="new-punishment-title" placeholder="Title (e.g., A Task)" class="w-full p-3 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-lg text-white">
                     <textarea id="new-punishment-desc" placeholder="Detailed description of the punishment..." class="w-full p-3 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-lg text-white h-20"></textarea>
-                    <button onclick="addPunishment()" class="btn-primary rounded-lg font-sans font-semibold w-full">Add Punishment</button>
+                    <button onclick="window.addPunishment()" class="btn-primary rounded-lg font-sans font-semibold w-full">Add Punishment</button>
                 </div>
 
                 <!-- Punishment List -->
@@ -242,24 +242,8 @@
 
 
     <script type="module">
-
-
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
-  const firebaseConfig = {
-    apiKey: "AIzaSyC6fo56hdBEkCgiHJAIqoNwZN7aNIID4xo",
-    authDomain: "nightingaleledger.firebaseapp.com",
-    projectId: "nightingaleledger",
-    storageBucket: "nightingaleledger.firebasestorage.app",
-    messagingSenderId: "1067784978486",
-    appId: "1:1067784978486:web:f0a41d82b130a6376dd897"
-  };
-
-
-
-
-
-        
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
+        // --- FIREBASE IMPORTS (Only defined once!) ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         // import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -321,7 +305,7 @@
 
         function handleError(e, customMessage) {
             console.error(customMessage, e);
-            // Only show the modal for critical failures like initialization errors
+            // Show the modal for critical failures
             showModal("Error", `${customMessage}: ${e.message || e}`);
         }
 
@@ -357,6 +341,7 @@
             document.getElementById('main-content').classList.remove('hidden');
         }
 
+        // Exposed to HTML onclick
         window.hostNewLedger = async function() {
             let newCode = generateLedgerCode();
             const docRef = doc(db, BASE_PATH, newCode);
@@ -377,6 +362,7 @@
             showModal("Ledger Hosted!", `Your new shared ledger code is: ${ledgerCode}. Share this with your partner!`);
         }
 
+        // Exposed to HTML onclick
         window.joinExistingLedger = function() {
             const inputCode = document.getElementById('join-code-input').value.trim().toUpperCase();
             
@@ -398,13 +384,19 @@
         
         async function initializeFirebase() {
             try {
+                // 💥 LOGGING: Output the configuration being used for debugging
+                console.log("--- Firebase Configuration Status ---");
+                console.log("Canvas Config Available:", !!canvasFirebaseConfig);
+                console.log("Config Being Used:", firebaseConfig);
+                console.log("-------------------------------------");
+
                 // 💥 FIX: Ensure all required fields for Auth are present before initializing
                 if (!firebaseConfig || 
                     !firebaseConfig.projectId || 
                     !firebaseConfig.apiKey || 
                     !firebaseConfig.authDomain) 
                 {
-                     throw new Error("Configuration Missing: Firebase config is incomplete or not provided. Check apiKey, authDomain, and projectId.");
+                     throw new Error("Configuration Missing: Firebase config is incomplete (missing apiKey, authDomain, or projectId).");
                 }
 
                 const app = initializeApp(firebaseConfig);
@@ -421,7 +413,8 @@
                     if (user) {
                         showLedgerSelectionModal();
                     } else {
-                        handleError(null, "Authentication failed. Could not get user ID.");
+                        // This case typically shouldn't happen immediately after sign-in
+                        handleError(null, "Authentication failed. User is null after sign-in.");
                     }
                 });
 
@@ -460,7 +453,7 @@
 
                     // Prompt name configuration if still using defaults
                     if (gameState.player1Name === DEFAULT_KEEPER_NAME && gameState.player2Name === DEFAULT_NIGHTINGALE_NAME) {
-                        showNameConfigModal();
+                        window.showNameConfigModal();
                     }
                 } else {
                     ledgerUnsubscribe(); // Stop listening
@@ -539,10 +532,10 @@
                             </div>
                             <div class="flex items-center space-x-3 w-full sm:w-auto justify-center">
                                 <span class="text-green-400 font-bold whitespace-nowrap">${habit.points} pts</span>
-                                <button onclick="completeHabit('${habit.id}', ${habit.points}, '${habit.assignee}')" class="btn-primary p-2 text-sm rounded-lg font-sans font-semibold">
+                                <button onclick="window.completeHabit('${habit.id}', ${habit.points}, '${habit.assignee}')" class="btn-primary p-2 text-sm rounded-lg font-sans font-semibold">
                                     Complete
                                 </button>
-                                <button onclick="deleteItem('habits', '${habit.id}')" class="text-gray-500 hover:text-[#b05c6c]">
+                                <button onclick="window.deleteItem('habits', '${habit.id}')" class="text-gray-500 hover:text-[#b05c6c]">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd" /></svg>
                                 </button>
                             </div>
@@ -570,15 +563,15 @@
                             <h4 class="text-lg font-semibold">${reward.title} <span class="text-green-400 font-bold text-sm ml-2">(${reward.cost} pts)</span></h4>
                             <p class="text-sm text-gray-400 mb-3">${reward.description}</p>
                             <div class="flex space-x-2">
-                                <button ${canKeeperAfford ? '' : 'disabled'} onclick="redeemReward('${reward.id}', ${reward.cost}, 'keeper')" 
+                                <button ${canKeeperAfford ? '' : 'disabled'} onclick="window.redeemReward('${reward.id}', ${reward.cost}, 'keeper')" 
                                     class="p-1 text-xs rounded-lg font-semibold flex-1 ${canKeeperAfford ? 'btn-primary' : 'bg-gray-700 text-gray-500 cursor-not-allowed'}">
                                     ${gameState.player1Name} Buys
                                 </button>
-                                <button ${canNightingaleAfford ? '' : 'disabled'} onclick="redeemReward('${reward.id}', ${reward.cost}, 'nightingale')" 
+                                <button ${canNightingaleAfford ? '' : 'disabled'} onclick="window.redeemReward('${reward.id}', ${reward.cost}, 'nightingale')" 
                                     class="p-1 text-xs rounded-lg font-semibold flex-1 ${canNightingaleAfford ? 'btn-primary' : 'bg-gray-700 text-gray-500 cursor-not-allowed'}">
                                     ${gameState.player2Name} Buys
                                 </button>
-                                <button onclick="deleteItem('rewards', '${reward.id}')" class="text-gray-500 hover:text-[#b05c6c] px-1">
+                                <button onclick="window.deleteItem('rewards', '${reward.id}')" class="text-gray-500 hover:text-[#b05c6c] px-1">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd" /></svg>
                                 </button>
                             </div>
@@ -600,7 +593,7 @@
                             <h4 class="text-lg font-semibold text-red-400">${punishment.title}</h4>
                             <p class="text-sm text-gray-400 mb-3">${punishment.description}</p>
                             <div class="flex space-x-2 justify-end">
-                                <button onclick="deleteItem('punishments', '${punishment.id}')" class="btn-secondary p-1 text-xs rounded-lg font-semibold">
+                                <button onclick="window.deleteItem('punishments', '${punishment.id}')" class="btn-secondary p-1 text-xs rounded-lg font-semibold">
                                     Mark as Applied / Remove
                                 </button>
                             </div>
@@ -612,7 +605,7 @@
         }
 
 
-        // --- FORM TOGGLE FUNCTIONS ---
+        // --- FORM TOGGLE FUNCTIONS (Exposed globally) ---
 
         window.toggleHabitForm = function() {
             document.getElementById('habit-form').classList.toggle('hidden');
@@ -636,7 +629,7 @@
             document.getElementById('name-config-modal').classList.add('hidden');
         }
 
-        // --- CORE APPLICATION LOGIC (CRUD & ACTIONS) ---
+        // --- CORE APPLICATION LOGIC (CRUD & ACTIONS - Exposed globally) ---
 
         // Name Configuration Action: Save
         window.savePlayerNames = async function() {
@@ -644,17 +637,17 @@
             const name2 = document.getElementById('player2-input').value.trim();
             
             if (!name1 || !name2) {
-                showModal("Validation Error", "Both usernames must be entered.");
+                window.showModal("Validation Error", "Both usernames must be entered.");
                 return;
             }
             
             if (name1 === name2) {
-                showModal("Name Conflict", "Usernames must be unique.");
+                window.showModal("Name Conflict", "Usernames must be unique.");
                 return;
             }
 
             if (!ledgerCode) {
-                 showModal("Error", "Please select or host a ledger first.");
+                 window.showModal("Error", "Please select or host a ledger first.");
                  return;
             }
             const docRef = doc(db, BASE_PATH, ledgerCode);
@@ -664,80 +657,85 @@
                     player1Name: name1,
                     player2Name: name2
                 });
-                hideNameConfigModal();
-                showModal("Success", `Usernames saved! The ledger is now shared between ${name1} and ${name2}.`);
+                window.hideNameConfigModal();
+                window.showModal("Success", `Usernames saved! The ledger is now shared between ${name1} and ${name2}.`);
             } catch (e) {
                 handleError(e, "Failed to save player names");
             }
         }
 
-        // Habit Action: Complete
-        window.completeHabit = async function(habitId, points, assignee) {
-            if (!ledgerCode) return showModal("Error", "No ledger selected.");
-            const docRef = doc(db, BASE_PATH, ledgerCode);
-            
-            // 1. Reward the assigned player
-            const scoreField = assignee === 'keeper' ? 'keeperScore' : 'nightingaleScore';
-            const newScore = (gameState[scoreField] || 0) + points;
-            
-            // 2. Remove the habit from the list (since it's a 'one-time' completion in this model)
-            const updatedHabits = gameState.habits.filter(h => h.id !== habitId);
-
-            try {
-                await updateDoc(docRef, {
-                    [scoreField]: newScore, // Use bracket notation for dynamic field update
-                    habits: updatedHabits
-                });
-                showModal("Habit Complete!", `${getPlayerName(assignee)} earned ${points} points!`);
-            } catch (e) {
-                handleError(e, "Failed to complete habit and update score");
-            }
-        }
-
         // Habit Action: Add
         window.addHabit = async function() {
-            if (!ledgerCode) return showModal("Error", "No ledger selected.");
             const desc = document.getElementById('new-habit-desc').value.trim();
-            const points = parseInt(document.getElementById('new-habit-points').value, 10);
+            const points = parseInt(document.getElementById('new-habit-points').value);
             const assignee = document.getElementById('new-habit-assignee').value;
-
-            if (!desc || isNaN(points) || points <= 0) {
-                return showModal("Validation Error", "Please provide a description and a valid point value (must be greater than zero).");
+            
+            if (!desc || isNaN(points) || points <= 0 || !assignee) {
+                showModal("Validation Error", "Please enter a valid description, positive points, and an assignee.");
+                return;
             }
-            
-            const newHabit = { 
-                id: generateUniqueId(), 
-                description: desc, 
-                points: points, 
-                assignee: assignee 
+
+            if (!ledgerCode) return showModal("Error", "Please select or host a ledger first.");
+
+            const newHabit = {
+                id: generateUniqueId(),
+                description: desc,
+                points: points,
+                assignee: assignee,
             };
-            
+
+            const docRef = doc(db, BASE_PATH, ledgerCode);
             try {
-                const docRef = doc(db, BASE_PATH, ledgerCode);
-                const updatedHabits = [...gameState.habits, newHabit];
-                await updateDoc(docRef, { habits: updatedHabits });
-                
-                // Clear form and hide
+                await updateDoc(docRef, {
+                    habits: [...gameState.habits, newHabit]
+                });
                 document.getElementById('new-habit-desc').value = '';
                 document.getElementById('new-habit-points').value = '10';
-                toggleHabitForm();
+                window.toggleHabitForm();
                 showModal("Success", "New habit added!");
-
             } catch (e) {
-                handleError(e, "Failed to add new habit");
+                handleError(e, "Failed to add habit");
             }
         }
+
+        // Habit Action: Complete (Add Score)
+        window.completeHabit = async function(habitId, points, assignee) {
+             if (!ledgerCode) return showModal("Error", "Please select or host a ledger first.");
+            
+            const docRef = doc(db, BASE_PATH, ledgerCode);
+            let scoreKey = assignee === 'keeper' ? 'keeperScore' : 'nightingaleScore';
+            
+            try {
+                // 1. Update the score
+                await updateDoc(docRef, {
+                    [scoreKey]: (gameState[scoreKey] || 0) + points
+                });
+                
+                // 2. Remove the habit after completion by filtering locally and pushing the new array
+                const updatedHabits = gameState.habits.filter(h => h.id !== habitId);
+                 await updateDoc(docRef, {
+                    habits: updatedHabits
+                });
+
+                showModal("Habit Complete!", `${getPlayerName(assignee)} earned ${points} points!`);
+            } catch (e) {
+                handleError(e, "Failed to complete habit");
+            }
+        }
+
 
         // Reward Action: Add
         window.addReward = async function() {
-            if (!ledgerCode) return showModal("Error", "No ledger selected.");
             const title = document.getElementById('new-reward-title').value.trim();
-            const cost = parseInt(document.getElementById('new-reward-cost').value, 10);
+            const cost = parseInt(document.getElementById('new-reward-cost').value);
             const desc = document.getElementById('new-reward-desc').value.trim();
-
+            
             if (!title || isNaN(cost) || cost <= 0) {
-                return showModal("Validation Error", "Please provide a title and a valid point cost (must be greater than zero).");
+                showModal("Validation Error", "Please enter a title and a valid, positive cost.");
+                return;
             }
+
+            if (!ledgerCode) return showModal("Error", "Please select or host a ledger first.");
 
             const newReward = {
                 id: generateUniqueId(),
@@ -746,59 +744,60 @@
                 description: desc,
             };
 
+            const docRef = doc(db, BASE_PATH, ledgerCode);
             try {
-                const docRef = doc(db, BASE_PATH, ledgerCode);
-                const updatedRewards = [...gameState.rewards, newReward];
-                await updateDoc(docRef, { rewards: updatedRewards });
-
+                await updateDoc(docRef, {
+                    rewards: [...gameState.rewards, newReward]
+                });
                 document.getElementById('new-reward-title').value = '';
                 document.getElementById('new-reward-cost').value = '50';
                 document.getElementById('new-reward-desc').value = '';
-                toggleRewardForm();
+                window.toggleRewardForm();
                 showModal("Success", "New reward defined!");
             } catch (e) {
-                handleError(e, "Failed to add new reward");
+                handleError(e, "Failed to add reward");
             }
         }
 
-        // Reward Action: Redeem
-        window.redeemReward = async function(rewardId, cost, purchaserRole) {
-            if (!ledgerCode) return showModal("Error", "No ledger selected.");
+        // Reward Action: Redeem (Deduct Score)
+        window.redeemReward = async function(rewardId, cost, redeemer) {
+            if (!ledgerCode) return showModal("Error", "Please select or host a ledger first.");
+            
+            const redeemerName = getPlayerName(redeemer);
+            let scoreKey = redeemer === 'keeper' ? 'keeperScore' : 'nightingaleScore';
+            const currentScore = gameState[scoreKey] || 0;
+            
+            if (currentScore < cost) {
+                 showModal("Insufficient Points", `${redeemerName} only has ${currentScore} points, but the reward costs ${cost}.`);
+                 return;
+            }
+
             const docRef = doc(db, BASE_PATH, ledgerCode);
             
-            const scoreField = purchaserRole === 'keeper' ? 'keeperScore' : 'nightingaleScore';
-            const currentScore = gameState[scoreField] || 0;
-            const purchaserName = getPlayerName(purchaserRole);
-
-            if (currentScore < cost) {
-                return showModal("Insufficient Points", `${purchaserName} only has ${currentScore} points and cannot afford this ${cost}-point reward.`);
-            }
-
-            // Remove the reward from the list
-            const updatedRewards = gameState.rewards.filter(r => r.id !== rewardId);
-            const newScore = currentScore - cost;
-
             try {
                 await updateDoc(docRef, {
-                    [scoreField]: newScore,
-                    rewards: updatedRewards
+                    [scoreKey]: currentScore - cost
                 });
-                showModal("Reward Redeemed!", `${purchaserName} has claimed the reward for ${cost} points!`);
+
+                const reward = gameState.rewards.find(r => r.id === rewardId);
+
+                showModal("Reward Redeemed!", `${redeemerName} spent ${cost} points on: ${reward ? reward.title : 'a reward'}!`);
             } catch (e) {
-                handleError(e, "Failed to redeem reward and update score");
+                handleError(e, "Failed to redeem reward");
             }
         }
-
 
         // Punishment Action: Add
         window.addPunishment = async function() {
-            if (!ledgerCode) return showModal("Error", "No ledger selected.");
             const title = document.getElementById('new-punishment-title').value.trim();
             const desc = document.getElementById('new-punishment-desc').value.trim();
-
-            if (!title) {
-                return showModal("Validation Error", "Please provide a title for the punishment.");
+            
+            if (!title || !desc) {
+                showModal("Validation Error", "Please enter a title and description for the punishment.");
+                return;
             }
+
+            if (!ledgerCode) return showModal("Error", "Please select or host a ledger first.");
 
             const newPunishment = {
                 id: generateUniqueId(),
@@ -806,30 +805,33 @@
                 description: desc,
             };
 
+            const docRef = doc(db, BASE_PATH, ledgerCode);
             try {
-                const docRef = doc(db, BASE_PATH, ledgerCode);
-                const updatedPunishments = [...gameState.punishments, newPunishment];
-                await updateDoc(docRef, { punishments: updatedPunishments });
-                
+                await updateDoc(docRef, {
+                    punishments: [...gameState.punishments, newPunishment]
+                });
                 document.getElementById('new-punishment-title').value = '';
                 document.getElementById('new-punishment-desc').value = '';
-                togglePunishmentForm();
+                window.togglePunishmentForm();
                 showModal("Success", "New punishment defined!");
             } catch (e) {
                 handleError(e, "Failed to add punishment");
             }
         }
 
-        // Generic Delete (For Rewards and Punishments)
+        // General Action: Delete Item (from any list)
         window.deleteItem = async function(collectionName, itemId) {
-            if (!ledgerCode) return showModal("Error", "No ledger selected.");
+             if (!ledgerCode) return showModal("Error", "Please select or host a ledger first.");
+            
             const docRef = doc(db, BASE_PATH, ledgerCode);
-            const currentItems = [...gameState[collectionName]];
+            const currentItems = gameState[collectionName];
+            // Filter out the item to be deleted
             const updatedItems = currentItems.filter(item => item.id !== itemId);
 
             try {
+                // Use a dynamic property name for the update
                 const updatePayload = {};
-                updatePayload[collectionName] = updatedItems; // Dynamic field name (e.g., 'rewards' or 'punishments')
+                updatePayload[collectionName] = updatedItems;
 
                 await updateDoc(docRef, updatePayload);
                 showModal("Item Removed", `Item removed from ${collectionName}.`);
@@ -845,4 +847,3 @@
     </script>
 </body>
 </html>
-
