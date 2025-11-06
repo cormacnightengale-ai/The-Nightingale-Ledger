@@ -82,6 +82,12 @@
             height: 24px;
             animation: spin 1s linear infinite;
         }
+        /* Small spinner for buttons */
+        .spinner.h-4 {
+            width: 1rem;
+            height: 1rem;
+            border-width: 3px;
+        }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -106,8 +112,9 @@
         <div id="selection-content" class="bg-[#1a1a1d] card p-6 rounded-xl w-11/12 max-w-lg text-center">
             <h2 class="text-3xl mb-6 text-white font-bold">Access The Nightingale Ledger</h2>
             
+            <!-- Removed the text next to the spinner as requested -->
             <p id="auth-loading" class="text-center text-gray-400 mb-6 flex items-center justify-center space-x-2">
-                <span class="spinner"></span> <span class="text-lg">Initializing secure connection...</span>
+                <span class="spinner"></span> 
             </p>
 
             <div id="selection-options" class="hidden">
@@ -300,6 +307,7 @@
         const DEFAULT_KEEPER_NAME = 'Keeper';
         const DEFAULT_NIGHTINGALE_NAME = 'Nightingale';
         
+        // State structure
         let gameState = {
             player1Name: DEFAULT_KEEPER_NAME,
             player2Name: DEFAULT_NIGHTINGALE_NAME,
@@ -308,7 +316,6 @@
             habits: [],
             rewards: [],
             punishments: [],
-            // New structure to track completions: { "20251105": { "habitId1": 2, "habitId2": 1 }, ... }
             dailyCompletions: {}, 
         };
         
@@ -328,33 +335,43 @@
         const COLLECTION_NAME = 'ledgers';
         const BASE_PATH = COLLECTION_NAME; 
         
-        // --- NEW EXAMPLE CONTENT (Themed for obedience/intimate structure) ---
-        // These items have a source field to prevent duplicates during auto-sync
-        const EXAMPLE_SOURCE = 'v20251105'; // Unique identifier for this version of defaults
+        // --- GEMINI API CONFIGURATION ---
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+        const API_KEY = ""; // Provided by Canvas environment
 
-        const EXAMPLE_HABITS = [
-            { description: "Complete morning grooming routine (shower, dress, brush teeth)", points: 15, assignee: "keeper", timesPerDay: 1, source: EXAMPLE_SOURCE },
-            { description: "Send a genuine, detailed check-in message during the workday", points: 10, assignee: "nightingale", timesPerDay: 1, source: EXAMPLE_SOURCE },
-            { description: "Complete 30 minutes of focused work on a non-entertainment goal", points: 25, assignee: "keeper", timesPerDay: 1, source: EXAMPLE_SOURCE },
-            { description: "No use of filler words (um, like, sort of) for one hour", points: 5, assignee: "nightingale", timesPerDay: 2, source: EXAMPLE_SOURCE },
-            { description: "Make the bed and tidy the master bedroom immediately upon rising", points: 15, assignee: "keeper", timesPerDay: 1, source: EXAMPLE_SOURCE },
-            { description: "Perform a required 10-minute stretching or mindfulness exercise", points: 20, assignee: "nightingale", timesPerDay: 1, source: EXAMPLE_SOURCE }
-        ];
+        const HABIT_SCHEMA = {
+            type: "OBJECT",
+            properties: {
+                description: { type: "STRING", description: "A concise, engaging habit description for a shared intimate ledger." },
+                points: { type: "INTEGER", description: "A point value between 5 and 50." },
+                timesPerDay: { type: "INTEGER", description: "Number of times the habit should be performed daily, between 1 and 3." },
+                assignee: { type: "STRING", enum: ["keeper", "nightingale"], description: "The role this habit is assigned to." }
+            },
+            required: ["description", "points", "timesPerDay", "assignee"],
+            propertyOrdering: ["description", "points", "timesPerDay", "assignee"]
+        };
 
-        const EXAMPLE_REWARDS = [
-            { title: "One Hour of Uninterrupted Cuddle Time", cost: 50, description: "Recipient dictates the snuggle terms: no phones, no interruptions, just quiet connection.", source: EXAMPLE_SOURCE },
-            { title: "Personal Chauffeur for the Evening", cost: 120, description: "The other user drives you anywhere you want for one evening, including running errands, without complaint.", source: EXAMPLE_SOURCE },
-            { title: "Control of the Remote/Music for 24 Hours", cost: 80, description: "Absolute dominion over all shared media and entertainment for one full day.", source: EXAMPLE_SOURCE },
-            { title: "Custom Bedtime Routine Service", cost: 70, description: "A personalized service including a hot beverage, back rub, and tuck-in by the other user.", source: EXAMPLE_SOURCE },
-        ];
+        const REWARD_SCHEMA = {
+            type: "OBJECT",
+            properties: {
+                title: { type: "STRING", description: "A short, exciting title for an intimate shared reward." },
+                cost: { type: "INTEGER", description: "A point cost between 50 and 300." },
+                description: { type: "STRING", description: "A detailed description of the reward's benefit." }
+            },
+            required: ["title", "cost", "description"],
+            propertyOrdering: ["title", "cost", "description"]
+        };
 
-        const EXAMPLE_PUNISHMENTS = [
-            { title: "Write a 500-word Appreciation Letter", description: "Must be handwritten and detail the other user's best qualities and why they are valued.", source: EXAMPLE_SOURCE },
-            { title: "Mandatory 15-Minute Stretching/Meditation", description: "Immediate performance of a calming, structured physical or mental routine upon issuance.", source: EXAMPLE_SOURCE },
-            { title: "Serve a 3-Course Meal", description: "Plan, shop for, cook, and serve a three-course dinner completely alone, providing full cleanup.", source: EXAMPLE_SOURCE },
-            { title: "Assigned Chore of the Day", description: "Requires completing the most despised, backlog chore of the other user's choice.", source: EXAMPLE_SOURCE }
-        ];
-        
+        const PUNISHMENT_SCHEMA = {
+            type: "OBJECT",
+            properties: {
+                title: { type: "STRING", description: "A short, impactful title for a punishment/consequence." },
+                description: { type: "STRING", description: "A detailed description of the task or consequence." }
+            },
+            required: ["title", "description"],
+            propertyOrdering: ["title", "description"]
+        };
+
         // --- UTILITY FUNCTIONS ---
 
         // Function to show a modal (can be information or confirmation)
@@ -445,8 +462,53 @@
         function getSavedLedgerCode() {
             return localStorage.getItem(LOCAL_STORAGE_KEY);
         }
+
+        /**
+         * Handles the exponential backoff retry logic for API calls.
+         */
+        async function callGeminiApi(payload, maxRetries = 5) {
+            let delay = 1000;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(`${API_URL}?key=${API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (jsonText) {
+                            return JSON.parse(jsonText);
+                        } else {
+                            throw new Error("Gemini response lacked expected JSON content.");
+                        }
+                    } else if (response.status === 429) {
+                        // Rate limit hit, retry with backoff
+                        if (i < maxRetries - 1) {
+                            // Suppress console logging of retries as per instructions
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            delay *= 2; // Exponential backoff
+                        } else {
+                            throw new Error("Rate limit exceeded after multiple retries.");
+                        }
+                    } else {
+                        const errorBody = await response.json();
+                        throw new Error(`API Error: ${response.status} - ${errorBody.error?.message || response.statusText}`);
+                    }
+                } catch (e) {
+                    if (i === maxRetries - 1) {
+                        throw e; // Throw final error
+                    }
+                    // Wait before next retry for general errors
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        }
         
-        // --- LEDGER SELECTION & AUTO-SYNC LOGIC ---
+        // --- LEDGER SELECTION LOGIC ---
 
         function showLedgerSelectionModal() {
             console.log("UI: Showing selection modal.");
@@ -461,53 +523,6 @@
             document.getElementById('ledger-selection-modal').classList.add('hidden');
             document.getElementById('main-content').classList.remove('hidden');
         }
-
-        /**
-         * Checks the current ledger against the server's default examples and adds any missing ones.
-         * This prevents duplicates by checking the 'source' tag.
-         */
-        async function autoSyncDefaults() {
-            if (!ledgerCode) return;
-
-            const docRef = doc(db, BASE_PATH, ledgerCode);
-            
-            // Collect the source tags for items already present in the ledger
-            const existingHabitSources = new Set(gameState.habits.map(h => h.source).filter(s => s));
-            const existingRewardSources = new Set(gameState.rewards.map(r => r.source).filter(s => s));
-            const existingPunishmentSources = new Set(gameState.punishments.map(p => p.source).filter(s => s));
-
-            // Filter out examples that are already present (by source tag)
-            const newHabits = EXAMPLE_HABITS
-                .filter(h => !existingHabitSources.has(h.source))
-                .map(h => ({ ...h, id: generateUniqueId() }));
-            
-            const newRewards = EXAMPLE_REWARDS
-                .filter(r => !existingRewardSources.has(r.source))
-                .map(r => ({ ...r, id: generateUniqueId() }));
-
-            const newPunishments = EXAMPLE_PUNISHMENTS
-                .filter(p => !existingPunishmentSources.has(p.source))
-                .map(p => ({ ...p, id: generateUniqueId() }));
-            
-            if (newHabits.length > 0 || newRewards.length > 0 || newPunishments.length > 0) {
-                console.log(`Auto-Sync: Adding ${newHabits.length} habits, ${newRewards.length} rewards, ${newPunishments.length} punishments.`);
-                
-                try {
-                    await updateDoc(docRef, {
-                        habits: [...gameState.habits, ...newHabits],
-                        rewards: [...gameState.rewards, ...newRewards],
-                        punishments: [...gameState.punishments, ...newPunishments]
-                    });
-                    // The onSnapshot listener will handle the UI update
-                } catch (e) {
-                    // Log error but don't halt the app for a non-critical sync failure
-                    console.error("Auto-Sync Failed to update Firestore:", e);
-                }
-            } else {
-                 console.log("Auto-Sync: No new defaults to add.");
-            }
-        }
-
 
         async function tryJoinLedger(code) {
             const docRef = doc(db, BASE_PATH, code);
@@ -540,7 +555,7 @@
 
             let newCode = generateLedgerCode();
             
-            // 1. Initialize the document with default examples
+            // 1. Initialize the document with empty state (no defaults)
             await initializeGameState(newCode); 
             
             ledgerCode = newCode;
@@ -594,7 +609,6 @@
                         
                         if (savedCode) {
                             console.log(`Found saved ledger code: ${savedCode}. Attempting to join...`);
-                            document.getElementById('auth-loading').querySelector('span').textContent = 'Connecting to saved ledger...';
                             
                             // Immediately try to join the saved ledger
                             tryJoinLedger(savedCode).then(success => {
@@ -650,9 +664,6 @@
                     
                     updateUI();
                     
-                    // CRITICAL: Call auto-sync immediately after loading the initial state
-                    autoSyncDefaults();
-
                     // Prompt name configuration if still using defaults
                     if (gameState.player1Name === DEFAULT_KEEPER_NAME && gameState.player2Name === DEFAULT_NIGHTINGALE_NAME) {
                         setTimeout(window.showNameConfigModal, 500); 
@@ -672,20 +683,16 @@
         }
 
         async function initializeGameState(code) {
-             // Attach unique IDs to the default examples before saving
-            const initialHabits = EXAMPLE_HABITS.map(h => ({ ...h, id: generateUniqueId() }));
-            const initialRewards = EXAMPLE_REWARDS.map(r => ({ ...r, id: generateUniqueId() }));
-            const initialPunishments = EXAMPLE_PUNISHMENTS.map(p => ({ ...p, id: generateUniqueId() }));
-
+             // Initializing with empty arrays as requested by the user.
             const initialData = {
                 player1Name: DEFAULT_KEEPER_NAME,
                 player2Name: DEFAULT_NIGHTINGALE_NAME,
                 keeperScore: 0,
                 nightingaleScore: 0,
                 dailyCompletions: {},
-                habits: initialHabits,
-                rewards: initialRewards,
-                punishments: initialPunishments,
+                habits: [],
+                rewards: [],
+                punishments: [],
             };
             
             try {
@@ -755,7 +762,7 @@
             const rewardsList = document.getElementById('rewards-list');
             rewardsList.innerHTML = '';
              if (!gameState.rewards || gameState.rewards.length === 0) {
-                 rewardsList.innerHTML = `<p class="text-center py-4 text-gray-500 italic">No rewards defined yet.</p>`;
+                 rewardsList.innerHTML = `<p class="text-center py-4 text-gray-500 italic">No rewards defined yet. Use 'Define' to create one.</p>`;
             } else {
                 gameState.rewards.forEach(reward => {
                     const keeperScore = gameState.keeperScore || 0;
@@ -835,40 +842,76 @@
             document.getElementById('name-config-modal').classList.add('hidden');
         }
         
-        // --- GENERATE EXAMPLE FUNCTION ---
-        window.generateExample = function(type) {
-            let examples, newExample;
+        // --- GENERATE EXAMPLE FUNCTION (Uses Gemini API to fill form fields) ---
+        window.generateExample = async function(type) {
+            let prompt, schema, formId;
 
             switch (type) {
                 case 'habit':
-                    examples = EXAMPLE_HABITS;
-                    newExample = examples[Math.floor(Math.random() * examples.length)];
-                    document.getElementById('new-habit-desc').value = newExample.description;
-                    document.getElementById('new-habit-points').value = newExample.points;
-                    document.getElementById('new-habit-times').value = newExample.timesPerDay;
-                    // Auto-set the assignee if specified, otherwise keep current selection
-                    if (newExample.assignee) {
-                        document.getElementById('new-habit-assignee').value = newExample.assignee;
-                    }
-                    window.toggleHabitForm();
+                    prompt = `Generate one new, engaging daily habit for a shared intimate ledger. The habit must be clear, actionable, and focus on mutual improvement or connection. Assign the habit randomly to either the 'keeper' or 'nightingale' role.`;
+                    schema = HABIT_SCHEMA;
+                    formId = 'habit-form';
                     break;
                 case 'reward':
-                    examples = EXAMPLE_REWARDS;
-                    newExample = examples[Math.floor(Math.random() * examples.length)];
-                    document.getElementById('new-reward-title').value = newExample.title;
-                    document.getElementById('new-reward-cost').value = newExample.cost;
-                    document.getElementById('new-reward-desc').value = newExample.description;
-                    window.toggleRewardForm();
+                    prompt = `Generate one luxury or intimacy-focused reward for a shared relationship ledger. The reward should be exciting and appealing to both partners.`;
+                    schema = REWARD_SCHEMA;
+                    formId = 'reward-form';
                     break;
                 case 'punishment':
-                    examples = EXAMPLE_PUNISHMENTS;
-                    newExample = examples[Math.floor(Math.random() * examples.length)];
-                    document.getElementById('new-punishment-title').value = newExample.title;
-                    document.getElementById('new-punishment-desc').value = newExample.description;
-                    window.togglePunishmentForm();
+                    prompt = `Generate one unique, non-monetary punishment or consequence for a shared relationship ledger, used when a habit is missed. It should be fair but motivational.`;
+                    schema = PUNISHMENT_SCHEMA;
+                    formId = 'punishment-form';
                     break;
                 default:
-                    showModal("Error", "Invalid example type.");
+                    return showModal("Error", "Invalid generation type.");
+            }
+
+            // Show form if hidden
+            document.getElementById(formId).classList.remove('hidden');
+
+            // Visually indicate loading on the button
+            const generateBtn = document.querySelector(`#${formId} button[onclick*="generateExample('${type}')"]`);
+            generateBtn.disabled = true;
+            generateBtn.innerHTML = '<span class="spinner h-4 w-4 mr-2"></span> Generating...';
+
+            // Construct the payload
+            const systemPrompt = "You are an AI assistant specialized in creating structured, themed content for a romantic shared habit and reward system called 'The Nightingale Ledger'. The style should be intimate, positive, and slightly gothic/formal.";
+            
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema
+                }
+            };
+            
+            try {
+                const generatedData = await callGeminiApi(payload);
+                
+                // Populate fields based on the generated JSON
+                if (type === 'habit') {
+                    document.getElementById('new-habit-desc').value = generatedData.description;
+                    document.getElementById('new-habit-points').value = generatedData.points || 10;
+                    document.getElementById('new-habit-times').value = generatedData.timesPerDay || 1;
+                    document.getElementById('new-habit-assignee').value = generatedData.assignee || 'keeper';
+                } else if (type === 'reward') {
+                    document.getElementById('new-reward-title').value = generatedData.title;
+                    document.getElementById('new-reward-cost').value = generatedData.cost || 50;
+                    document.getElementById('new-reward-desc').value = generatedData.description;
+                } else if (type === 'punishment') {
+                    document.getElementById('new-punishment-title').value = generatedData.title;
+                    document.getElementById('new-punishment-desc').value = generatedData.description;
+                }
+                
+                showModal("Generated Idea!", "A suggestion has been placed in the form fields. Review and edit it, then click the 'Add' or 'Define' button to submit!");
+
+            } catch (e) {
+                handleError(e, "Failed to generate content from AI");
+            } finally {
+                // Reset button state
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = 'Generate Example';
             }
         }
 
