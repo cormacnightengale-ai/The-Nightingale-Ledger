@@ -24,7 +24,7 @@ const GAME_STATE_COLLECTION = 'ledgers'; // Collection where all ledger data is 
 const LEDGER_DOC_ID_LENGTH = 6; // Length of the random code/document ID
 
 let gameState = {
-    // Customization state (New)
+    // Customization state
     customization: {
         keeperTitle: 'The Keeper',
         nightingaleTitle: 'The Nightingale',
@@ -32,6 +32,11 @@ let gameState = {
         nightingaleName: 'User 2', // Placeholder for the actual user
         currentLayout: 'stacked', // 'stacked', 'condensed', 'tabbed'
         currentTab: 'habits',      // 'habits', 'rewards', 'punishments'
+    },
+    // NEW: Map user IDs to their roles
+    users: {
+        keeperId: null,
+        nightingaleId: null
     },
     scores: {
         keeper: 0,
@@ -43,6 +48,8 @@ let gameState = {
     ledgerCode: null, // The 6-character code
     hostId: null,      // The ID of the user who created the ledger
 };
+
+let userRole = null; // Tracks 'keeper', 'nightingale', or null for the current client
 
 // --- Utility Functions ---
 
@@ -179,6 +186,35 @@ async function updateLedgerCustomization(updates) {
 }
 
 /**
+ * Updates the user assignment part of the remote ledger document.
+ * @param {object} updates - An object containing fields to update in the 'users' map (e.g., 'keeperId').
+ */
+async function updateLedgerUsers(updates) {
+    if (!db || !gameState.ledgerCode) {
+        showModal("Update Failed", "Not connected to a ledger. Cannot assign roles.");
+        return false;
+    }
+
+    const ledgerDocRef = doc(db, getLedgerCollectionPath(), gameState.ledgerCode);
+    
+    // Construct the update object to modify nested fields
+    const updatePayload = {};
+    for (const key in updates) {
+        updatePayload[`users.${key}`] = updates[key];
+    }
+
+    try {
+        await updateDoc(ledgerDocRef, updatePayload);
+        console.log("User roles updated successfully.");
+        return true;
+    } catch (error) {
+        console.error("Error updating user roles:", error);
+        showModal("Role Assignment Error", `Failed to assign user role. Error: ${error.message}`);
+        return false;
+    }
+}
+
+/**
  * Attaches a real-time listener to the current ledger document.
  */
 function listenToLedger() {
@@ -191,20 +227,44 @@ function listenToLedger() {
 
     onSnapshot(ledgerDocRef, (docSnap) => {
         if (docSnap.exists()) {
-            console.log("Current data:", docSnap.data());
-            
-            // Update the global state with the new data
             const remoteData = docSnap.data();
-            // Deep merge customization data if it exists
+            console.log("Current data:", remoteData);
+            
+            // Deep merge customization data
             if (remoteData.customization) {
                  gameState.customization = { ...gameState.customization, ...remoteData.customization };
             }
+            // Deep merge user data
+            if (remoteData.users) {
+                 gameState.users = { ...gameState.users, ...remoteData.users };
+            }
             // Shallow merge other top-level data
             Object.keys(remoteData).forEach(key => {
-                if (key !== 'customization') {
+                if (key !== 'customization' && key !== 'users') {
                     gameState[key] = remoteData[key];
                 }
             });
+
+            // Check if the current user is assigned a role
+            if (gameState.users.keeperId === userId) {
+                userRole = 'keeper';
+            } else if (gameState.users.nightingaleId === userId) {
+                userRole = 'nightingale';
+            } else {
+                userRole = null;
+            }
+
+            // After state update, check if the current user needs to set their profile
+            if (gameState.ledgerCode && userRole && 
+                ((userRole === 'keeper' && gameState.customization.keeperName === 'User 1') || 
+                 (userRole === 'nightingale' && gameState.customization.nightingaleName === 'User 2'))) {
+                
+                window.showProfileModal(userRole);
+            } else {
+                // If they are all set or not connected, hide the modal
+                document.getElementById('user-profile-modal').classList.add('hidden');
+            }
+
 
             // Re-render the UI based on the new gameState
             renderUI();
@@ -268,7 +328,6 @@ function renderUI() {
     }
     
     // TODO: Implement habit/reward/punishment list rendering across all relevant lists (stacked, tabbed)
-    // For now, this is just a placeholder and will be built in the next iteration.
 
     // --- 5. Debug Info Update ---
     updateDebugInfo();
@@ -288,11 +347,15 @@ window.hostNewLedger = async function() {
     // The collection path is constructed here
     const collectionPath = getLedgerCollectionPath(); 
     const ledgerDocRef = doc(db, collectionPath, newCode); 
-
-    // Initial state for the new ledger
+    
+    // Host is assigned as the Keeper
     const initialLedgerData = {
-        customization: gameState.customization, // Include initial customization settings
-        scores: { keeper: 0, nightingale: 0 }, // Reset scores
+        customization: gameState.customization, 
+        users: {
+            keeperId: userId,
+            nightingaleId: null
+        },
+        scores: { keeper: 0, nightingale: 0 }, 
         habits: [],
         rewards: [],
         punishments: [],
@@ -303,8 +366,6 @@ window.hostNewLedger = async function() {
     };
 
     try {
-        console.log(`Attempting to host ledger with code: ${newCode} at path: ${collectionPath}`);
-        
         const docSnap = await getDoc(ledgerDocRef);
         if (docSnap.exists()) {
             console.warn("Hosting conflict detected. Retrying with new code.");
@@ -317,10 +378,13 @@ window.hostNewLedger = async function() {
         // Success! Update local state and start listening
         gameState.ledgerCode = newCode;
         gameState.hostId = userId;
+        userRole = 'keeper'; // Set local role
         console.log(`Hosted new ledger successfully.`);
         showModal("Ledger Hosted!", `Your new shared ledger code is: ${newCode}. Share this with your partner!`);
         listenToLedger();
-        renderUI();
+        
+        // Immediately prompt the host (Keeper) to set their profile
+        window.showProfileModal('keeper');
 
     } catch (error) {
         console.error("Error hosting new ledger:", error);
@@ -350,18 +414,47 @@ window.joinLedger = async function() {
         const docSnap = await getDoc(ledgerDocRef);
 
         if (docSnap.exists()) {
-            // Ledger found! Update local state and start listening
             const remoteData = docSnap.data();
+            
+            // Check for available slot
+            let assignedRole = null;
+            let updates = {};
+
+            if (remoteData.users?.keeperId === userId || remoteData.users?.nightingaleId === userId) {
+                 // Already assigned a role
+                 assignedRole = remoteData.users.keeperId === userId ? 'keeper' : 'nightingale';
+            } else if (!remoteData.users?.keeperId) {
+                // Host slot empty - assign as Keeper (less likely unless host deleted the doc)
+                assignedRole = 'keeper';
+                updates.keeperId = userId;
+            } else if (!remoteData.users?.nightingaleId) {
+                // Partner slot empty - assign as Nightingale
+                assignedRole = 'nightingale';
+                updates.nightingaleId = userId;
+            } else {
+                showModal("Ledger Full", "This ledger already has two users assigned (Keeper and Nightingale).");
+                return;
+            }
+
+            // Assign role in Firestore if needed
+            if (Object.keys(updates).length > 0) {
+                const updateSuccess = await updateLedgerUsers(updates);
+                if (!updateSuccess) return; 
+            }
+            
+            // Success! Update local state and start listening
             gameState.ledgerCode = code;
             gameState.hostId = remoteData.hostId;
+            userRole = assignedRole; // Set local role
             
-            // Overwrite local state with remote ledger state (onSnapshot will handle final merge)
-            Object.assign(gameState, remoteData); 
-
-            console.log(`Joined ledger with code: ${code}`);
-            showModal("Joined Successfully", `Connected to ledger ${code}.`);
+            showModal("Joined Successfully", `Connected to ledger ${code}. You are the ${assignedRole.charAt(0).toUpperCase() + assignedRole.slice(1)}.`);
             listenToLedger();
-            renderUI();
+            
+            // Prompt the joiner to set their profile if using default name
+            if ((userRole === 'keeper' && remoteData.customization?.keeperName === 'User 1') || 
+                (userRole === 'nightingale' && remoteData.customization?.nightingaleName === 'User 2')) {
+                window.showProfileModal(userRole);
+            }
 
         } else {
             showModal("Code Not Found", `No active ledger found for code: ${code}. Please verify the code.`);
@@ -373,7 +466,62 @@ window.joinLedger = async function() {
 }
 
 
-// --- Customization Functions ---
+// --- User Profile & Customization Functions ---
+
+/**
+ * Shows the modal for the current user to set their name and title.
+ * @param {'keeper'|'nightingale'} role - The role the user is setting up.
+ */
+window.showProfileModal = function(role) {
+    const roleEl = document.getElementById('profile-modal-role');
+    const roleName = role.charAt(0).toUpperCase() + role.slice(1);
+    
+    roleEl.textContent = roleName;
+    roleEl.classList.remove('text-yellow-300', 'text-green-400', 'text-blue-400');
+    roleEl.classList.add(role === 'keeper' ? 'text-green-400' : 'text-blue-400');
+    
+    // Set placeholder/default values
+    const currentName = gameState.customization[`${role}Name`];
+    const currentTitle = gameState.customization[`${role}Title`];
+    
+    document.getElementById('profile-name-input').value = currentName === `User ${role === 'keeper' ? '1' : '2'}` ? '' : currentName;
+    document.getElementById('profile-title-input').value = currentTitle === `The ${roleName}` ? '' : currentTitle;
+
+
+    document.getElementById('user-profile-modal').classList.remove('hidden');
+}
+
+/**
+ * Saves the current user's name and title to the ledger based on their assigned role.
+ */
+window.setMyProfile = function() {
+    if (!userRole) {
+        showModal("Error", "Your role is not defined. Please reconnect.");
+        return;
+    }
+    
+    const nameInput = document.getElementById('profile-name-input').value.trim();
+    const titleInput = document.getElementById('profile-title-input').value.trim();
+
+    const defaultName = userRole === 'keeper' ? 'User 1' : 'User 2';
+    const defaultTitle = userRole === 'keeper' ? 'The Keeper' : 'The Nightingale';
+
+    const newName = nameInput || defaultName;
+    const newTitle = titleInput || defaultTitle;
+    
+    if (newName.length > 30 || newTitle.length > 30) {
+        showModal("Input Too Long", "Name and Title must be 30 characters or less.");
+        return;
+    }
+
+    const updates = {};
+    updates[`${userRole}Name`] = newName;
+    updates[`${userRole}Title`] = newTitle;
+    
+    updateLedgerCustomization(updates);
+    document.getElementById('user-profile-modal').classList.add('hidden');
+}
+
 
 /**
  * Saves the user-defined names (User 1 / User 2 placeholders).
