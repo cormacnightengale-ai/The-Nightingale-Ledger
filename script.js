@@ -2,10 +2,16 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, setDoc, updateDoc, collection, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// --- Global Variables (Provided by Canvas Environment) ---
-// Note: EXAMPLE_DATABASE is expected to be loaded via examples.js first.
+// --- Global Variables (Provided by Canvas Environment or User File) ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+// FIX: Check for the canvas string (__firebase_config) OR the global object (window.firebaseConfig)
+// The global object is created when firebase_config.js is loaded in index.html
+const configSource = typeof __firebase_config !== 'undefined' 
+    ? JSON.parse(__firebase_config) 
+    : (typeof window.firebaseConfig !== 'undefined' ? window.firebaseConfig : null);
+const firebaseConfig = configSource;
+
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
 // --- Firebase/App State ---
@@ -13,10 +19,8 @@ let app;
 let db;
 let auth;
 let userId = null;
-let isAuthReady = false; // NEW: Flag to ensure DB is initialized
-let GAME_STATE_PATH = null;
+let isAuthReady = false; // Flag to ensure DB is initialized
 const GAME_STATE_COLLECTION = 'ledgers'; // Collection where all ledger data is stored
-const GAME_STATE_DOC_ID = 'ledger_data';
 const LEDGER_DOC_ID_LENGTH = 6; // Length of the random code/document ID
 
 let gameState = {
@@ -74,7 +78,6 @@ function updateDebugInfo() {
  * @param {string} message - The content message.
  */
 function showModal(title, message) {
-    // Logic to show a custom modal (omitted for brevity, assume it exists)
     console.error(`[MODAL] ${title}: ${message}`);
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
@@ -86,16 +89,31 @@ function showModal(title, message) {
     modalBody.textContent = message;
     modal.classList.remove('hidden');
 
-    // Add a temporary overlay click handler to close it
     const closeModal = () => {
         modal.classList.add('hidden');
-        modal.removeEventListener('click', closeModal);
+        document.getElementById('modal-close-btn').onclick = null; // Clean up
     };
 
-    // Assuming the modal has a close button or can be clicked to dismiss
     document.getElementById('modal-close-btn').onclick = closeModal;
 }
 
+/**
+ * Enables the main Host/Join buttons and hides the initialization status.
+ */
+function enableAppUI() {
+    // Get all buttons on the setup screen and remove 'disabled'
+    document.getElementById('host-select-btn')?.removeAttribute('disabled');
+    document.getElementById('join-select-btn')?.removeAttribute('disabled');
+    
+    // Update status message
+    const appStatus = document.getElementById('app-status');
+    if (appStatus) {
+        appStatus.textContent = 'Ready to connect or host.';
+        appStatus.classList.remove('bg-yellow-900/50', 'text-yellow-300');
+        appStatus.classList.add('bg-green-900/50', 'text-green-300');
+    }
+    console.log("App UI enabled. Buttons are now clickable.");
+}
 
 // --- Firebase Interaction ---
 
@@ -143,7 +161,9 @@ function renderUI() {
         mainScreen.classList.remove('hidden');
         document.getElementById('current-ledger-code').textContent = gameState.ledgerCode;
         // Logic to update scores, habits, rewards, etc. based on gameState
-        // ...
+        document.getElementById('keeper-score').textContent = gameState.scores.keeper;
+        document.getElementById('nightingale-score').textContent = gameState.scores.nightingale;
+        // ... (Additional rendering logic needs implementation later)
     } else {
         setupScreen.classList.remove('hidden');
         mainScreen.classList.add('hidden');
@@ -157,13 +177,16 @@ function renderUI() {
  * Attempts to host a new ledger with a randomly generated code.
  */
 window.hostNewLedger = async function() {
-    if (!db) {
-        showModal("Initialization Error", "Database connection is not yet ready. Please wait a moment and try again.");
-        return; // CRITICAL FIX: Ensure DB is ready
+    // CRITICAL: Ensure DB is ready.
+    if (!db || !isAuthReady) {
+        showModal("Initialization Error", "The application is still initializing. Please wait until the app status shows 'Ready'.");
+        return; 
     }
 
     const newCode = generateLedgerCode();
-    const ledgerDocRef = doc(db, getLedgerCollectionPath(), newCode);
+    // The collection path is constructed here
+    const collectionPath = getLedgerCollectionPath(); 
+    const ledgerDocRef = doc(db, collectionPath, newCode); // db is guaranteed to be a Firestore instance here
 
     // Initial state for the new ledger
     const initialLedgerData = {
@@ -177,12 +200,14 @@ window.hostNewLedger = async function() {
     };
 
     try {
-        // Check if the document already exists (highly unlikely with random code, but safe)
+        console.log(`Attempting to host ledger with code: ${newCode} at path: ${collectionPath}`);
+        
+        // Check if the document already exists
         const docSnap = await getDoc(ledgerDocRef);
         if (docSnap.exists()) {
-            // If it exists, try again (recursion, but unlikely to happen)
+            console.warn("Hosting conflict detected. Retrying with new code.");
             showModal("Hosting Conflict", "A ledger with this code already exists. Retrying...");
-            return hostNewLedger();
+            return hostNewLedger(); // Recursively try again with a new code
         }
 
         // Set the new document
@@ -191,14 +216,14 @@ window.hostNewLedger = async function() {
         // Success! Update local state and start listening
         gameState.ledgerCode = newCode;
         gameState.hostId = userId;
-        console.log(`Hosted new ledger with code: ${newCode}`);
+        console.log(`Hosted new ledger successfully.`);
         showModal("Ledger Hosted!", `Your new shared ledger code is: ${newCode}. Share this with your partner!`);
         listenToLedger();
         renderUI();
 
     } catch (error) {
         console.error("Error hosting new ledger:", error);
-        showModal("Hosting Failed", "Could not create the ledger document. Check console for details.");
+        showModal("Hosting Failed", `Could not create the ledger document. Error: ${error.message}`);
     }
 }
 
@@ -206,9 +231,9 @@ window.hostNewLedger = async function() {
  * Attempts to join an existing ledger using a code.
  */
 window.joinLedger = async function() {
-    if (!db) {
-        showModal("Initialization Error", "Database connection is not yet ready. Please wait a moment and try again.");
-        return; // CRITICAL FIX: Ensure DB is ready
+    if (!db || !isAuthReady) {
+        showModal("Initialization Error", "The application is still initializing. Please wait until the app status shows 'Ready'.");
+        return; 
     }
 
     const code = document.getElementById('join-code').value.toUpperCase().trim();
@@ -236,17 +261,12 @@ window.joinLedger = async function() {
             listenToLedger();
             renderUI();
 
-            // Optional: You could update the ledger here to record the new user joined
-            // await updateDoc(ledgerDocRef, {
-            //     joinedUsers: arrayUnion(userId)
-            // });
-
         } else {
             showModal("Code Not Found", `No active ledger found for code: ${code}. Please verify the code.`);
         }
     } catch (error) {
         console.error("Error joining ledger:", error);
-        showModal("Joining Failed", "Could not connect to the ledger. Check console for details.");
+        showModal("Joining Failed", `Could not connect to the ledger. Error: ${error.message}`);
     }
 }
 
@@ -258,17 +278,16 @@ window.joinLedger = async function() {
  */
 window.initApp = async function() {
     if (!firebaseConfig) {
-        showModal("Configuration Error", "Firebase configuration is missing. Cannot start the application.");
+        showModal("Configuration Error", "Firebase configuration is missing. Cannot start the application. Ensure firebase_config.js is loaded.");
         return;
     }
 
     try {
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
-        db = getFirestore(app);
-        // Enable verbose logging for debugging
-        // setLogLevel('debug');
-
+        db = getFirestore(app); // Synchronous initialization of DB instance
+        console.log("1. Firebase App and Firestore instance (db) created.");
+        
         // Authentication Handler
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -284,15 +303,18 @@ window.initApp = async function() {
 
             // Authentication is complete, DB is ready
             isAuthReady = true;
-            console.log("Firebase services are ready. User ID:", userId);
-
-            // Re-render the UI once authenticated
+            console.log("2. Authentication complete. User ID:", userId);
+            enableAppUI(); // Enable buttons now
             renderUI();
         });
 
         // Use custom token if provided (for Canvas environment)
         if (initialAuthToken) {
+            console.log("Attempting sign-in with custom token.");
             await signInWithCustomToken(auth, initialAuthToken);
+        } else {
+            // If no token, the onAuthStateChanged handler above will trigger anonymous sign-in
+            console.log("No custom token provided. Relying on onAuthStateChanged for anonymous sign-in.");
         }
 
     } catch (error) {
@@ -302,18 +324,15 @@ window.initApp = async function() {
 };
 
 
-// --- Event Handlers & Local State Management ---
-
-// ... (Your other functions like toggleHabitForm, addHabit, etc. should go here)
-// Example structure:
+// --- Event Handlers & Local State Management (Placeholders) ---
 
 window.addHabit = function() {
     if (!gameState.ledgerCode) {
         showModal("Not Connected", "Please host or join a ledger before defining habits.");
         return;
     }
-    // ... logic to get form data ...
-    // ... logic to update the remote document using updateDoc() ...
+    // TODO: Implement logic to get form data and update the remote document using updateDoc()
+    showModal("Feature Not Implemented", "Habit addition logic is pending implementation.");
 };
 
 window.addReward = function() {
@@ -321,27 +340,36 @@ window.addReward = function() {
         showModal("Not Connected", "Please host or join a ledger before defining rewards.");
         return;
     }
-    // ... logic to get form data ...
-    // ... logic to update the remote document using updateDoc() ...
+    // TODO: Implement logic to get form data and update the remote document using updateDoc()
+    showModal("Feature Not Implemented", "Reward definition logic is pending implementation.");
 };
 
-// ... (Other UI-related functions)
-// ...
+window.addPunishment = function() {
+    if (!gameState.ledgerCode) {
+        showModal("Not Connected", "Please host or join a ledger before defining punishments.");
+        return;
+    }
+    // TODO: Implement logic to get form data and update the remote document using updateDoc()
+    showModal("Feature Not Implemented", "Punishment definition logic is pending implementation.");
+};
 
-// Helper functions for UI toggling (assuming they existed)
+// Helper functions for UI toggling 
 window.toggleSetup = function(section) {
-    const screens = ['host-ledger', 'join-ledger', 'define-rules'];
+    const screens = ['host-ledger', 'join-ledger', 'define-rules', 'host-join-select'];
     screens.forEach(id => {
-        document.getElementById(id).classList.add('hidden');
+        const el = document.getElementById(id);
+        if(el) el.classList.add('hidden');
     });
-    document.getElementById(section).classList.remove('hidden');
+    const targetEl = document.getElementById(section);
+    if (targetEl) targetEl.classList.remove('hidden');
 }
 
-// Placeholder for generating example data (required to be present for other functions)
-// Note: This function relies on EXAMPLE_DATABASE being loaded.
+// Placeholder for generating example data
 window.generateExample = function(type) {
+    // Note: The 'examples.js' file is assumed to load the EXAMPLE_DATABASE globally.
+    // The previous error was unrelated to this block.
     if (typeof EXAMPLE_DATABASE === 'undefined' || !EXAMPLE_DATABASE[type + 's']) {
-        showModal("Error", "Example data is not loaded correctly.");
+        showModal("Error", "Example data is not loaded correctly. Ensure examples.js is present.");
         return;
     }
 
@@ -354,16 +382,13 @@ window.generateExample = function(type) {
         document.getElementById('new-habit-points').value = example.points;
         document.getElementById('new-habit-times').value = 1;
         document.getElementById('new-habit-assignee').value = example.type;
-        window.toggleSetup('define-rules'); // Show rules section
     } else if (type === 'reward') {
         document.getElementById('new-reward-title').value = example.title;
         document.getElementById('new-reward-cost').value = example.cost;
         document.getElementById('new-reward-desc').value = example.description;
-        window.toggleSetup('define-rules');
     } else if (type === 'punishment') {
         document.getElementById('new-punishment-title').value = example.title;
         document.getElementById('new-punishment-desc').value = example.description;
-        window.toggleSetup('define-rules');
     }
 }
 
