@@ -21,7 +21,7 @@ setLogLevel('debug');
 
 
 // --- Global Variables (Hardcoded Firebase Configuration) ---
-// Configuration from user-provided firebase_config.js
+// Configuration is hardcoded here to make the app runnable outside the Immersive Canvas environment.
 const firebaseConfig = {
   apiKey: "AIzaSyAdmOIlbRx6uvgZiNat-BYI5GH-lvkiEqc",
   authDomain: "nightingaleledger-4627.firebaseapp.com",
@@ -43,11 +43,11 @@ let userId = null;
 let isInitialized = false; 
 
 // Path for public/shared data: ledgers/{projectId}/data/ledger_state/{docId}
-// This path is chosen to be consistent and non-Canvas specific.
+// This path is used for standard web deployment to maintain a single, public ledger state.
 const GAME_STATE_DOC_ID = 'ledger_data';
 const GAME_STATE_PATH = `ledgers/${appId}/data/ledger_state/${GAME_STATE_DOC_ID}`;
 
-// Default Game State structure (Now using P1 and P2 for reciprocity)
+// Default Game State structure
 let gameState = {
     players: {
         p1: 'Player 1',
@@ -144,7 +144,7 @@ function getPlayerInfo(playerId) {
  * Renders the main application state to the DOM.
  */
 function renderState() {
-    // 1. Player Names and IDs
+    // 1. Player Names and Scores
     const p1Info = getPlayerInfo('p1');
     const p2Info = getPlayerInfo('p2');
 
@@ -259,8 +259,8 @@ function renderState() {
 // --- Firebase Initialization ---
 
 async function initFirebase() {
-    if (!firebaseConfig.apiKey) {
-        const errorMsg = "FATAL ERROR: Firebase API key is missing. Please check the configuration.";
+    if (!firebaseConfig || !firebaseConfig.apiKey) {
+        const errorMsg = "FATAL ERROR: Firebase configuration is missing or invalid.";
         document.getElementById('auth-error-message').textContent = errorMsg;
         console.error(errorMsg);
         return;
@@ -319,8 +319,8 @@ function setupRealtimeListener() {
             gameState = {
                 ...gameState,
                 ...data,
-                scores: { ...gameState.scores, ...data.scores },
-                players: { ...gameState.players, ...data.players },
+                scores: { ...gameState.scores, ...data.scores || {} },
+                players: { ...gameState.players, ...data.players || {} },
             };
         } else {
             console.warn("Ledger document does not exist. Reverting to default state.");
@@ -594,6 +594,7 @@ window.showHistoryModal = function() {
     } else {
         // Sort history by timestamp (most recent first, as unshift is used to add new items)
         const sortedHistory = [...gameState.history].sort((a, b) => {
+            // Safely retrieve date for sorting, handling serverTimestamp() objects
             const dateA = a.timestamp && a.timestamp.toDate ? a.timestamp.toDate().getTime() : 0;
             const dateB = b.timestamp && b.timestamp.toDate ? b.timestamp.toDate().getTime() : 0;
             return dateB - dateA; // Descending order
@@ -607,7 +608,6 @@ window.showHistoryModal = function() {
             const itemElement = document.createElement('div');
             itemElement.className = `p-3 rounded-lg flex justify-between items-center border-l-4 ${isReward ? 'border-p2' : 'border-p1'} bg-[#1a1a1d]`;
             
-            // Note: serverTimestamp() objects have a toDate() method. 
             const date = item.timestamp && item.timestamp.toDate ? item.timestamp.toDate().toLocaleString() : 'Processing...';
 
             itemElement.innerHTML = `
