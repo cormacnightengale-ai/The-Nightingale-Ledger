@@ -263,7 +263,7 @@
     <script type="module">
         // --- FIREBASE IMPORTS (Only defined once!) ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // 🚨 CRITICAL DEBUG STEP: Turn on verbose logging for Firebase
@@ -291,23 +291,20 @@
         
         let ledgerCode = null; 
 
-        // MANDATORY GLOBALS - Ensuring we use environment variables correctly
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const canvasFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // Use Canvas config if it is present and valid
-        const firebaseConfig = canvasFirebaseConfig && Object.keys(canvasFirebaseConfig).length > 0 ? canvasFirebaseConfig : {
-            // Placeholder/Manual config (This should NOT be used in Canvas environment)
-            apiKey: "PLACEHOLDER", 
-            authDomain: "PLACEHOLDER",
-            projectId: "PLACEHOLDER"
+        // USER'S HARDCODED FIREBASE CONFIGURATION
+        const firebaseConfig = {
+            apiKey: "AIzaSyC6fo56hdBEkCgiHJAIqoNwZN7aNIID4xo",
+            authDomain: "nightingaleledger.firebaseapp.com",
+            projectId: "nightingaleledger",
+            storageBucket: "nightingaleledger.firebasestorage.app",
+            messagingSenderId: "1067784978486",
+            appId: "1:1067784978486:web:f0a41d82b130a6376dd897"
         };
         
-        // Firestore Path Definitions (Public Data for Shared State)
+        // Firestore Path Definitions (Simplified for self-hosting)
         const COLLECTION_NAME = 'ledgers';
-        // Documents are stored publicly: artifacts/{appId}/public/data/ledgers/{ledgerCode}
-        const BASE_PATH = `artifacts/${appId}/public/data/${COLLECTION_NAME}`; 
+        // Documents will be stored in the top-level 'ledgers' collection
+        const BASE_PATH = COLLECTION_NAME; 
         
         // --- UTILITY FUNCTIONS ---
 
@@ -424,22 +421,17 @@
                 console.log("AUTH FLOW: Step 1 - Initializing Firebase App and Services...");
 
                 if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
-                     throw new Error("Configuration Missing: Firebase config is incomplete (missing apiKey or projectId). Check environment variables.");
+                     throw new Error("Configuration Missing: Firebase config is incomplete (missing apiKey or projectId).");
                 }
 
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
-                // --- Attempt Sign-In ---
+                // --- Attempt Sign-In (Simplified to Anonymous) ---
                 try {
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                        console.log("AUTH FLOW: Step 2a - Signed in with Custom Token.");
-                    } else {
-                        await signInAnonymously(auth);
-                        console.log("AUTH FLOW: Step 2b - Signed in Anonymously.");
-                    }
+                    await signInAnonymously(auth);
+                    console.log("AUTH FLOW: Step 2 - Signed in Anonymously.");
                 } catch(e) {
                     // Catch sign-in errors specifically
                     console.error("AUTH FLOW: Sign-In Failed:", e);
