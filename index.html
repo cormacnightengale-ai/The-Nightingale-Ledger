@@ -100,7 +100,7 @@
             <h2 class="text-3xl mb-6 text-white font-bold">Access The Nightingale Ledger</h2>
             
             <p id="auth-loading" class="text-center text-gray-400 mb-6 flex items-center justify-center space-x-2">
-                <span class="spinner"></span> <span>Initializing secure connection...</span>
+                <span class="spinner"></span> <span class="text-lg">Initializing secure connection...</span>
             </p>
 
             <div id="selection-options" class="hidden">
@@ -264,10 +264,10 @@
         // --- FIREBASE IMPORTS (Only defined once!) ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        // import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // setLogLevel('Debug'); // Uncomment to see Firebase logs in console if issues persist
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // 🚨 CRITICAL DEBUG STEP: Turn on verbose logging for Firebase
+        setLogLevel('Debug'); 
 
         // 🚨 IMPORTANT: The manual config below will be overwritten by the Canvas environment.
         const MANUAL_FIREBASE_CONFIG = {
@@ -350,6 +350,7 @@
         // --- LEDGER SELECTION LOGIC ---
 
         function showLedgerSelectionModal() {
+            console.log("AUTH FLOW: Step 4 - Authentication successful, showing selection modal.");
             // Hide loading indicator and show options
             document.getElementById('auth-loading').classList.add('hidden');
             document.getElementById('selection-options').classList.remove('hidden');
@@ -424,7 +425,8 @@
         
         async function initializeFirebase() {
             try {
-                // 💥 Check: Ensure all required fields for Auth are present before initializing
+                console.log("AUTH FLOW: Step 1 - Initializing Firebase App and Services...");
+
                 if (!firebaseConfig || 
                     !firebaseConfig.projectId || 
                     !firebaseConfig.apiKey || 
@@ -437,19 +439,25 @@
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
+                // Attempt Sign-In
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
+                    console.log("AUTH FLOW: Signed in with Custom Token.");
                 } else {
                     await signInAnonymously(auth);
+                    console.log("AUTH FLOW: Signed in Anonymously.");
                 }
 
-                // 🔑 CRITICAL: Wait for authentication state to be confirmed before starting the UI
+                // CRITICAL: Wait for authentication state to be confirmed before starting the UI
                 onAuthStateChanged(auth, (user) => {
+                    console.log(`AUTH FLOW: Step 3 - Auth state changed. User is: ${user ? 'Authenticated' : 'Unauthenticated'}`);
                     if (user) {
                         isAuthReady = true;
                         showLedgerSelectionModal();
                     } else {
                         console.warn("Authentication state changed to null. User is not logged in.");
+                        // Even if unauthenticated, if this is a canvas setup, we show the modal to proceed.
+                        // However, for safety, we only proceed on a successful user object.
                     }
                 });
 
