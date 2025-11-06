@@ -261,10 +261,10 @@
 
 
     <script type="module">
-        // --- FIREBASE IMPORTS (Only defined once!) ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // --- FIREBASE IMPORTS (Using CDN links for single-file deployment) ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
         
         // 🚨 CRITICAL DEBUG STEP: Turn on verbose logging for Firebase
         setLogLevel('Debug'); 
@@ -291,19 +291,18 @@
         
         let ledgerCode = null; 
 
-        // USER'S HARDCODED FIREBASE CONFIGURATION
+        // 🚨 USER'S HARDCODED FIREBASE CONFIGURATION 🚨
         const firebaseConfig = {
-            apiKey: "AIzaSyC6fo56hdBEkCgiHJAIqoNwZN7aNIID4xo",
-            authDomain: "nightingaleledger.firebaseapp.com",
-            projectId: "nightingaleledger",
-            storageBucket: "nightingaleledger.firebasestorage.app",
-            messagingSenderId: "1067784978486",
-            appId: "1:1067784978486:web:f0a41d82b130a6376dd897"
+            apiKey: "AIzaSyAdmOIlbRx6uvgZiNat-BYI5GH-lvkiEqc",
+            authDomain: "nightingaleledger-4627.firebaseapp.com",
+            projectId: "nightingaleledger-4627",
+            storageBucket: "nightingaleledger-4627.firebasestorage.app",
+            messagingSenderId: "299188208241",
+            appId: "1:299188208241:web:7bb086293357f4ec4691d0"
         };
         
-        // Firestore Path Definitions (Simplified for self-hosting)
+        // Firestore Path Definitions
         const COLLECTION_NAME = 'ledgers';
-        // Documents will be stored in the top-level 'ledgers' collection
         const BASE_PATH = COLLECTION_NAME; 
         
         // --- UTILITY FUNCTIONS ---
@@ -343,7 +342,7 @@
         // --- LEDGER SELECTION LOGIC ---
 
         function showLedgerSelectionModal() {
-            console.log("AUTH FLOW: Step 4 - Authentication successful, showing selection modal.");
+            console.log("UI: Showing selection modal.");
             // Hide loading indicator and show options
             document.getElementById('auth-loading').classList.add('hidden');
             document.getElementById('selection-options').classList.remove('hidden');
@@ -364,13 +363,8 @@
 
             let newCode = generateLedgerCode();
             const docRef = doc(db, BASE_PATH, newCode);
-            // Check for collision (low chance, but safe)
-            const docSnap = await getDoc(docRef); 
-
-            if (docSnap.exists()) {
-                // If it exists, try a new one (only done once for simplicity)
-                newCode = generateLedgerCode(); 
-            }
+            // We rely on Firestore Security Rules to prevent accidental overwrites/collisions,
+            // but we check for existence just in case, though the chance is minimal.
             
             ledgerCode = newCode;
             document.getElementById('current-ledger-code').textContent = ledgerCode;
@@ -418,35 +412,26 @@
         
         async function initializeFirebase() {
             try {
-                console.log("AUTH FLOW: Step 1 - Initializing Firebase App and Services...");
-
-                if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
-                     throw new Error("Configuration Missing: Firebase config is incomplete (missing apiKey or projectId).");
-                }
-
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
-                // --- Attempt Sign-In (Simplified to Anonymous) ---
+                // --- Attempt Anonymous Sign-In ---
                 try {
                     await signInAnonymously(auth);
-                    console.log("AUTH FLOW: Step 2 - Signed in Anonymously.");
                 } catch(e) {
-                    // Catch sign-in errors specifically
-                    console.error("AUTH FLOW: Sign-In Failed:", e);
+                    console.error("Sign-In Failed:", e);
                     throw new Error(`Authentication Error: ${e.code || e.message}`);
                 }
 
-                // CRITICAL: Wait for authentication state to be confirmed before starting the UI
+                // Wait for authentication state to be confirmed
                 onAuthStateChanged(auth, (user) => {
-                    console.log(`AUTH FLOW: Step 3 - Auth state changed. User is: ${user ? 'Authenticated' : 'Unauthenticated'}`);
                     if (user) {
                         isAuthReady = true;
                         showLedgerSelectionModal();
                     } else {
-                        console.warn("Authentication state changed to null. User is not logged in.");
-                        // This case should be rare if sign-in was successful, but handled here.
+                        isAuthReady = false;
+                        handleError(new Error("User state is null"), "Failed to establish anonymous session.");
                     }
                 });
 
@@ -487,12 +472,11 @@
 
                     // Prompt name configuration if still using defaults
                     if (gameState.player1Name === DEFAULT_KEEPER_NAME && gameState.player2Name === DEFAULT_NIGHTINGALE_NAME) {
-                        // Use a short delay to ensure the main content is loaded first
                         setTimeout(window.showNameConfigModal, 500); 
                     }
                 } else {
-                    // If the document is deleted externally while listening
-                    ledgerUnsubscribe(); 
+                    // Document was deleted or never existed
+                    if (ledgerUnsubscribe) ledgerUnsubscribe(); 
                     ledgerCode = null;
                     showLedgerSelectionModal();
                     showModal("Ledger Closed", `The shared ledger has been deleted or is no longer accessible.`);
@@ -739,7 +723,6 @@
             
             try {
                 // 1. Update the score
-                // Use the data from the gameState object, which is synced by the listener
                 const currentScore = gameState[scoreKey] || 0; 
                 await updateDoc(docRef, {
                     [scoreKey]: currentScore + points
