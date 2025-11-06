@@ -307,16 +307,18 @@
         
         // --- UTILITY FUNCTIONS ---
 
+        // NOTE: This function is defined locally in the module scope.
         function showModal(title, message) {
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-message').textContent = message;
             document.getElementById('modal-container').classList.remove('hidden');
         }
 
+        // NOTE: This function is defined locally in the module scope.
         function handleError(e, customMessage) {
             console.error(customMessage, e);
-            // Show the modal for critical failures
-            showModal("Error", `${customMessage}: ${e.message || e}`);
+            // Call local function directly (FIXED: removed window. prefix)
+            showModal("Error", `${customMessage}: ${e.message || e}`); 
         }
 
         function generateUniqueId() {
@@ -358,13 +360,12 @@
         // Exposed to HTML onclick
         window.hostNewLedger = async function() {
             if (!isAuthReady) {
+                // Call local function directly (FIXED: removed window. prefix)
                 return showModal("Wait", "Authentication is still initializing. Please wait a moment.");
             }
 
             let newCode = generateLedgerCode();
             const docRef = doc(db, BASE_PATH, newCode);
-            // We rely on Firestore Security Rules to prevent accidental overwrites/collisions,
-            // but we check for existence just in case, though the chance is minimal.
             
             ledgerCode = newCode;
             document.getElementById('current-ledger-code').textContent = ledgerCode;
@@ -372,18 +373,21 @@
             await initializeGameState(ledgerCode);
             hideLedgerSelectionModal();
             startRealtimeListener();
+            // Call local function directly (FIXED: removed window. prefix)
             showModal("Ledger Hosted!", `Your new shared ledger code is: ${ledgerCode}. Share this with your partner!`);
         }
 
         // Exposed to HTML onclick
         window.joinExistingLedger = async function() {
             if (!isAuthReady) {
+                 // Call local function directly (FIXED: removed window. prefix)
                 return showModal("Wait", "Authentication is still initializing. Please wait a moment.");
             }
             
             const inputCode = document.getElementById('join-code-input').value.trim().toUpperCase();
             
             if (inputCode.length !== 6 || !/^[0-9A-Z]+$/.test(inputCode)) {
+                // Call local function directly (FIXED: removed window. prefix)
                 showModal("Invalid Code", "Please enter a valid 6-character alphanumeric code.");
                 return;
             }
@@ -393,6 +397,7 @@
             try {
                 const docSnap = await getDoc(docRef);
                 if (!docSnap.exists()) {
+                    // Call local function directly (FIXED: removed window. prefix)
                     showModal("Ledger Not Found", `The ledger code "${inputCode}" does not exist.`);
                     return;
                 }
@@ -479,6 +484,7 @@
                     if (ledgerUnsubscribe) ledgerUnsubscribe(); 
                     ledgerCode = null;
                     showLedgerSelectionModal();
+                    // Call local function directly (FIXED: removed window. prefix)
                     showModal("Ledger Closed", `The shared ledger has been deleted or is no longer accessible.`);
                 }
                 
@@ -623,6 +629,7 @@
 
         // --- FORM TOGGLE FUNCTIONS (Exposed globally) ---
 
+        // NOTE: These are exposed to window for inline HTML calls
         window.toggleHabitForm = function() {
             document.getElementById('habit-form').classList.toggle('hidden');
         }
@@ -653,17 +660,20 @@
             const name2 = document.getElementById('player2-input').value.trim();
             
             if (!name1 || !name2) {
-                window.showModal("Validation Error", "Both usernames must be entered.");
+                // Call local function directly (FIXED: removed window. prefix)
+                showModal("Validation Error", "Both usernames must be entered.");
                 return;
             }
             
             if (name1 === name2) {
-                window.showModal("Name Conflict", "Usernames must be unique.");
+                 // Call local function directly (FIXED: removed window. prefix)
+                showModal("Name Conflict", "Usernames must be unique.");
                 return;
             }
 
             if (!ledgerCode) {
-                 window.showModal("Error", "Please select or host a ledger first.");
+                 // Call local function directly (FIXED: removed window. prefix)
+                 showModal("Error", "Please select or host a ledger first.");
                  return;
             }
             const docRef = doc(db, BASE_PATH, ledgerCode);
@@ -674,7 +684,8 @@
                     player2Name: name2
                 });
                 window.hideNameConfigModal();
-                window.showModal("Success", `Usernames saved! The ledger is now shared between ${name1} and ${name2}.`);
+                 // Call local function directly (FIXED: removed window. prefix)
+                showModal("Success", `Usernames saved! The ledger is now shared between ${name1} and ${name2}.`);
             } catch (e) {
                 handleError(e, "Failed to save player names");
             }
@@ -687,6 +698,7 @@
             const assignee = document.getElementById('new-habit-assignee').value;
             
             if (!desc || isNaN(points) || points <= 0 || !assignee) {
+                 // Call local function directly (FIXED: removed window. prefix)
                 showModal("Validation Error", "Please enter a valid description, positive points, and an assignee.");
                 return;
             }
@@ -708,6 +720,7 @@
                 document.getElementById('new-habit-desc').value = '';
                 document.getElementById('new-habit-points').value = '10';
                 window.toggleHabitForm();
+                 // Call local function directly (FIXED: removed window. prefix)
                 showModal("Success", "New habit added!");
             } catch (e) {
                 handleError(e, "Failed to add habit");
@@ -734,6 +747,7 @@
                     habits: updatedHabits
                 });
 
+                 // Call local function directly (FIXED: removed window. prefix)
                 showModal("Habit Complete!", `${getPlayerName(assignee)} earned ${points} points!`);
             } catch (e) {
                 handleError(e, "Failed to complete habit");
@@ -748,6 +762,7 @@
             const desc = document.getElementById('new-reward-desc').value.trim();
             
             if (!title || isNaN(cost) || cost <= 0) {
+                 // Call local function directly (FIXED: removed window. prefix)
                 showModal("Validation Error", "Please enter a title and a valid, positive cost.");
                 return;
             }
@@ -770,6 +785,7 @@
                 document.getElementById('new-reward-cost').value = '50';
                 document.getElementById('new-reward-desc').value = '';
                 window.toggleRewardForm();
+                 // Call local function directly (FIXED: removed window. prefix)
                 showModal("Success", "New reward defined!");
             } catch (e) {
                 handleError(e, "Failed to add reward");
@@ -785,6 +801,7 @@
             const currentScore = gameState[scoreKey] || 0;
             
             if (currentScore < cost) {
+                 // Call local function directly (FIXED: removed window. prefix)
                  showModal("Insufficient Points", `${redeemerName} only has ${currentScore} points, but the reward costs ${cost}.`);
                  return;
             }
@@ -798,6 +815,7 @@
 
                 const reward = gameState.rewards.find(r => r.id === rewardId);
 
+                 // Call local function directly (FIXED: removed window. prefix)
                 showModal("Reward Redeemed!", `${redeemerName} spent ${cost} points on: ${reward ? reward.title : 'a reward'}!`);
             } catch (e) {
                 handleError(e, "Failed to redeem reward");
@@ -810,6 +828,7 @@
             const desc = document.getElementById('new-punishment-desc').value.trim();
             
             if (!title || !desc) {
+                 // Call local function directly (FIXED: removed window. prefix)
                 showModal("Validation Error", "Please enter a title and description for the punishment.");
                 return;
             }
@@ -830,6 +849,7 @@
                 document.getElementById('new-punishment-title').value = '';
                 document.getElementById('new-punishment-desc').value = '';
                 window.togglePunishmentForm();
+                 // Call local function directly (FIXED: removed window. prefix)
                 showModal("Success", "New punishment defined!");
             } catch (e) {
                 handleError(e, "Failed to add punishment");
@@ -851,6 +871,7 @@
                 updatePayload[collectionName] = updatedItems;
 
                 await updateDoc(docRef, updatePayload);
+                 // Call local function directly (FIXED: removed window. prefix)
                 showModal("Item Removed", `Item removed from ${collectionName}.`);
             } catch (e) {
                 handleError(e, `Failed to remove item from ${collectionName}`);
