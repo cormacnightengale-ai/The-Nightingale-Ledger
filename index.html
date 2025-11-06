@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Shared Ledger: Habit and Reward Tracker</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts for the intimate, non-gothic style -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Base Intimate Styling */
+        body {
+            font-family: 'Playfair Display', serif;
+            background: linear-gradient(to bottom right, #0a0a0c 0%, #1a1a1d 100%); /* Deep charcoal to near black gradient */
+            min-height: 100vh;
+            color: #d4d4dc; /* Light grey for text */
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        h1, h2, h3 {
+            font-family: 'Cinzel', serif;
+            color: #b05c6c; /* Deep romantic red/plum */
+        }
+        .card {
+            background-color: #24242c; /* Darker secondary background for cards */
+            border: 1px solid #3c3c45;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+        /* Thematic Button Styles */
+        .btn-primary {
+            background-color: #b05c6c;
+            color: #1a1a1d;
+            transition: all 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #d47e8c;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        .btn-secondary {
+            background-color: #3c3c45;
+            color: #d4d4dc;
+        }
+        .btn-secondary:hover {
+            background-color: #555562;
+        }
+        /* Input focus styles */
+        input:focus, select:focus, textarea:focus {
+            border-color: #b05c6c;
+            box-shadow: 0 0 0 1px #b05c6c;
+        }
+        /* Mobile adjustment for flex layout */
+        @media (max-width: 768px) {
+            .grid-cols-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <!-- Modal for Messages (replaces alert/confirm) -->
+    <div id="modal-container" class="fixed inset-0 bg-black bg-opacity-70 z-50 hidden flex items-center justify-center">
+        <div class="bg-[#1a1a1d] card p-6 rounded-lg w-11/12 max-w-sm">
+            <h3 id="modal-title" class="text-xl mb-3 text-white font-bold"></h3>
+            <p id="modal-message" class="text-sm mb-4"></p>
+            <button onclick="document.getElementById('modal-container').classList.add('hidden')" class="btn-primary w-full p-2 rounded-md font-sans font-semibold">
+                Understood
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal for Name Configuration -->
+    <div id="name-config-modal" class="fixed inset-0 bg-black bg-opacity-70 z-50 hidden flex items-center justify-center">
+        <div class="bg-[#1a1a1d] card p-6 rounded-lg w-11/12 max-w-md">
+            <h3 class="text-xl mb-4 text-white font-bold">Set Player Names</h3>
+            <p class="text-sm mb-3">These names will be used throughout the shared ledger.</p>
+            
+            <label for="player1-input" class="block text-sm mb-1 text-gray-400">Name for Player 1 (Internal Role: Keeper)</label>
+            <input type="text" id="player1-input" placeholder="e.g., Alex" class="w-full p-2 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white">
+
+            <label for="player2-input" class="block text-sm mb-1 text-gray-400">Name for Player 2 (Internal Role: Nightingale)</label>
+            <input type="text" id="player2-input" placeholder="e.g., Jamie" class="w-full p-2 mb-4 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white">
+
+            <button onclick="savePlayerNames()" class="btn-primary w-full p-2 rounded-md font-sans font-semibold">
+                Save Names
+            </button>
+        </div>
+    </div>
+    
+    <!-- Main Header -->
+    <header class="text-center mb-8">
+        <h1 class="text-4xl md:text-5xl font-bold mb-2 tracking-widest">The Shared Ledger</h1>
+        <p class="text-xl italic text-[#d47e8c]">A Shared Habit and Reward System</p>
+    </header>
+
+    <!-- Authentication and ID Display -->
+    <div id="auth-info" class="mb-6 p-4 card rounded-lg text-sm md:text-base flex justify-between items-center">
+        <div>
+            <p>Current User ID: <span id="current-user-id" class="text-[#d47e8c] font-mono break-all">...loading</span></p>
+            <p class="mt-2 text-xs italic">Share this ID to connect to the same ledger.</p>
+        </div>
+        <button onclick="showNameConfigModal()" class="btn-secondary p-2 text-xs rounded-md font-sans font-semibold ml-4 shadow-lg">
+            Edit Player Names
+        </button>
+    </div>
+
+    <!-- Score Board -->
+    <div id="score-board" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10 text-center">
+        <div class="card p-6 rounded-xl">
+            <h2 class="text-2xl mb-1" id="player1-name-display">Player 1's Ledger</h2>
+            <p class="text-4xl font-bold font-sans text-green-400" id="keeper-score">0</p>
+            <p class="text-xs italic text-gray-400">Points to Spend</p>
+        </div>
+        <div class="card p-6 rounded-xl">
+            <h2 class="text-2xl mb-1" id="player2-name-display">Player 2's Ledger</h2>
+            <p class="text-4xl font-bold font-sans text-green-400" id="nightingale-score">0</p>
+            <p class="text-xs italic text-gray-400">Points to Spend</p>
+        </div>
+    </div>
+
+    <!-- Main Content Grid (Habits, Rewards, Punishments) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        <!-- 1. HABITS (Daily Tasks) -->
+        <section class="lg:col-span-2">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-3xl">Habits & Daily Tasks</h2>
+                <button onclick="toggleHabitForm()" class="btn-primary p-2 rounded-md text-sm font-semibold shadow-lg">
+                    + Add New Habit
+                </button>
+            </div>
+            
+            <!-- Habit Add Form -->
+            <div id="habit-form" class="card p-4 rounded-lg mb-6 hidden">
+                <h3 class="text-xl mb-3 text-white">Create a New Habit</h3>
+                <input type="text" id="new-habit-desc" placeholder="Habit description (e.g., Daily workout)" class="w-full p-2 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white">
+                <div class="flex space-x-3 mb-3">
+                    <input type="number" id="new-habit-points" placeholder="Points (e.g., 10)" class="w-1/3 p-2 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white" value="10">
+                    <select id="new-habit-assignee" class="w-2/3 p-2 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white">
+                        <!-- Options updated dynamically by JS -->
+                        <option value="keeper">Assign to Player 1</option>
+                        <option value="nightingale">Assign to Player 2</option>
+                    </select>
+                </div>
+                <button onclick="addHabit()" class="btn-primary p-2 rounded-md font-sans font-semibold w-full">Add Habit</button>
+            </div>
+
+            <!-- Habit List -->
+            <div id="habits-list" class="space-y-4">
+                <!-- Habits will be rendered here by updateUI -->
+                <p class="text-center py-8 text-gray-500 italic" id="habits-loading">Loading habits...</p>
+            </div>
+        </section>
+
+        <!-- 2. REWARDS & PUNISHMENTS -->
+        <section class="lg:col-span-1">
+            
+            <!-- REWARDS -->
+            <h2 class="text-3xl mb-4">Earned Rewards</h2>
+            <button onclick="toggleRewardForm()" class="btn-secondary p-2 rounded-md text-sm font-semibold shadow-lg mb-4">
+                + Design New Reward
+            </button>
+            
+            <!-- Reward Add Form -->
+            <div id="reward-form" class="card p-4 rounded-lg mb-6 hidden">
+                <h3 class="text-xl mb-3 text-white">Design New Reward</h3>
+                <input type="text" id="new-reward-title" placeholder="Title (e.g., A Massage)" class="w-full p-2 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white">
+                <textarea id="new-reward-desc" placeholder="Detailed description..." class="w-full p-2 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white h-20"></textarea>
+                <input type="number" id="new-reward-cost" placeholder="Cost (Points)" class="w-full p-2 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white" value="50">
+                <button onclick="addReward()" class="btn-primary p-2 rounded-md font-sans font-semibold w-full">Define Reward</button>
+            </div>
+
+            <!-- Reward List -->
+            <div id="rewards-list" class="space-y-3 mb-10">
+                <!-- Rewards will be rendered here by updateUI -->
+                <p class="text-center py-4 text-gray-500 italic" id="rewards-loading">Loading rewards...</p>
+            </div>
+
+            <!-- PUNISHMENTS -->
+            <h2 class="text-3xl mb-4 mt-8">Punishments</h2>
+            <button onclick="togglePunishmentForm()" class="btn-secondary p-2 rounded-md text-sm font-semibold shadow-lg mb-4">
+                + Define New Punishment
+            </button>
+            
+            <!-- Punishment Add Form -->
+            <div id="punishment-form" class="card p-4 rounded-lg mb-6 hidden">
+                <h3 class="text-xl mb-3 text-white">Define New Punishment</h3>
+                <input type="text" id="new-punishment-title" placeholder="Title (e.g., A Task)" class="w-full p-2 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white">
+                <textarea id="new-punishment-desc" placeholder="Detailed description of the punishment..." class="w-full p-2 mb-3 bg-[#1a1a1d] border border-[#3c3c45] rounded-md text-white h-20"></textarea>
+                <button onclick="addPunishment()" class="btn-primary p-2 rounded-md font-sans font-semibold w-full">Add Punishment</button>
+            </div>
+
+            <!-- Punishment List -->
+            <div id="punishments-list" class="space-y-3">
+                <!-- Punishments will be rendered here by updateUI -->
+                <p class="text-center py-4 text-gray-500 italic" id="punishments-loading">Loading punishments...</p>
+            </div>
+        </section>
+
+    </div>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, collection, getDoc, getDocs, deleteDoc, query, where, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // setLogLevel('Debug'); // Uncomment to see Firebase logs
+
+        // --- GLOBAL VARIABLES & FIREBASE SETUP ---
+        
+        let db;
+        let auth;
+        let gameState = {
+            player1Name: 'Player 1',
+            player2Name: 'Player 2',
+            keeperScore: 0,
+            nightingaleScore: 0,
+            habits: [],
+            rewards: [],
+            punishments: [],
+        };
+        let currentUserId = 'unknown';
+
+        // MANDATORY GLOBALS
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // Firestore Path Definitions (Public Data for Shared State)
+        const COLLECTION_NAME = 'ledger_state';
+        const DOCUMENT_ID = 'gamestate_doc';
+        const GAME_STATE_PATH = `artifacts/${appId}/public/data/${COLLECTION_NAME}`;
+        
+        // --- UTILITY FUNCTIONS ---
+
+        function showModal(title, message) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('modal-container').classList.remove('hidden');
+        }
+
+        function handleError(e, customMessage) {
+            console.error(customMessage, e);
+            showModal("Error", `${customMessage}: ${e.message || e}`);
+        }
+
+        function generateUniqueId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Helper to get the display name based on the internal role
+        function getPlayerName(role) {
+            return role === 'keeper' ? gameState.player1Name : gameState.player2Name;
+        }
+
+        // --- FIREBASE INITIALIZATION AND AUTH ---
+        
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // Auth
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUserId = user.uid;
+                        document.getElementById('current-user-id').textContent = currentUserId;
+                        startRealtimeListener();
+                    } else {
+                        document.getElementById('current-user-id').textContent = 'Signed out/Error';
+                        handleError(null, "Authentication failed. Could not get user ID.");
+                    }
+                });
+
+            } catch (e) {
+                handleError(e, "Firebase Initialization Failed");
+            }
+        }
+        
+        // --- REAL-TIME DATA LISTENER ---
+
+        function startRealtimeListener() {
+            const docRef = doc(db, GAME_STATE_PATH, DOCUMENT_ID);
+            
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    // Merge existing state with loaded data, preserving defaults if fields are missing
+                    const data = docSnap.data();
+                    gameState.player1Name = data.player1Name || 'Player 1';
+                    gameState.player2Name = data.player2Name || 'Player 2';
+                    gameState.keeperScore = data.keeperScore || 0;
+                    gameState.nightingaleScore = data.nightingaleScore || 0;
+                    gameState.habits = data.habits || [];
+                    gameState.rewards = data.rewards || [];
+                    gameState.punishments = data.punishments || [];
+                    
+                    updateUI();
+                } else {
+                    // Document doesn't exist, create initial state
+                    initializeGameState();
+                }
+                
+                // FIX: Added null checks to prevent TypeError if elements haven't fully loaded yet when snapshot is received.
+                const habitsLoading = document.getElementById('habits-loading');
+                if (habitsLoading) habitsLoading.classList.add('hidden');
+                
+                const rewardsLoading = document.getElementById('rewards-loading');
+                if (rewardsLoading) rewardsLoading.classList.add('hidden');
+                
+                const punishmentsLoading = document.getElementById('punishments-loading');
+                if (punishmentsLoading) punishmentsLoading.classList.add('hidden');
+
+            }, (error) => {
+                handleError(error, "Failed to listen to game state updates");
+            });
+        }
+
+        async function initializeGameState() {
+            const initialData = {
+                player1Name: 'Player 1',
+                player2Name: 'Player 2',
+                keeperScore: 0,
+                nightingaleScore: 0,
+                habits: [
+                    { id: generateUniqueId(), description: "Read for 30 minutes", points: 15, assignee: "keeper" },
+                    { id: generateUniqueId(), description: "Tidy shared space", points: 10, assignee: "nightingale" }
+                ],
+                rewards: [
+                    { id: generateUniqueId(), title: "Dinner Date", description: "A special night dedicated to passion and connection.", cost: 100 },
+                ],
+                punishments: [
+                    { id: generateUniqueId(), title: "Cold Shower", description: "Must take a full cold shower immediately." },
+                ]
+            };
+            
+            try {
+                const docRef = doc(db, GAME_STATE_PATH, DOCUMENT_ID);
+                await setDoc(docRef, initialData);
+            } catch (e) {
+                handleError(e, "Failed to initialize game state");
+            }
+        }
+
+        // --- UI RENDERING ---
+
+        function updateUI() {
+            // Update Name Displays
+            document.getElementById('player1-name-display').textContent = `${gameState.player1Name}'s Ledger`;
+            document.getElementById('player2-name-display').textContent = `${gameState.player2Name}'s Ledger`;
+
+            // Update Score Inputs
+            document.getElementById('keeper-score').textContent = gameState.keeperScore || 0;
+            document.getElementById('nightingale-score').textContent = gameState.nightingaleScore || 0;
+
+            // Update Habit Assignee Options
+            document.querySelector('#new-habit-assignee option[value="keeper"]').textContent = `Assign to ${gameState.player1Name}`;
+            document.querySelector('#new-habit-assignee option[value="nightingale"]').textContent = `Assign to ${gameState.player2Name}`;
+
+            // Update Name Configuration Modal inputs
+            document.getElementById('player1-input').value = gameState.player1Name;
+            document.getElementById('player2-input').value = gameState.player2Name;
+
+
+            // Update Habits List
+            const habitsList = document.getElementById('habits-list');
+            habitsList.innerHTML = ''; // Clear existing list
+            
+            if (!gameState.habits || gameState.habits.length === 0) {
+                 habitsList.innerHTML = `<p class="text-center py-8 text-gray-500 italic">No habits defined yet. Click '+ Add New Habit' to start.</p>`;
+            } else {
+                gameState.habits.forEach(habit => {
+                    const assigneeName = getPlayerName(habit.assignee);
+                    
+                    const itemHtml = `
+                        <div class="card p-4 rounded-lg flex items-center justify-between">
+                            <div>
+                                <p class="text-lg font-semibold">${habit.description}</p>
+                                <p class="text-xs italic text-[#b05c6c]">Assigned to: ${assigneeName}</p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <span class="text-green-400 font-bold">${habit.points} pts</span>
+                                <button onclick="completeHabit('${habit.id}', ${habit.points}, '${habit.assignee}')" class="btn-primary p-2 text-sm rounded-md font-sans font-semibold">
+                                    Complete
+                                </button>
+                                <button onclick="deleteItem('habits', '${habit.id}')" class="text-gray-500 hover:text-[#b05c6c]">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    habitsList.insertAdjacentHTML('beforeend', itemHtml);
+                });
+            }
+
+
+            // Update Rewards List
+            const rewardsList = document.getElementById('rewards-list');
+            rewardsList.innerHTML = '';
+             if (!gameState.rewards || gameState.rewards.length === 0) {
+                 rewardsList.innerHTML = `<p class="text-center py-4 text-gray-500 italic">No rewards defined yet.</p>`;
+            } else {
+                gameState.rewards.forEach(reward => {
+                    const itemHtml = `
+                        <div class="card p-3 rounded-lg">
+                            <h4 class="text-lg font-semibold">${reward.title} <span class="text-green-400 font-bold text-sm ml-2">(${reward.cost} pts)</span></h4>
+                            <p class="text-sm text-gray-400 mb-3">${reward.description}</p>
+                            <div class="flex space-x-2">
+                                <button onclick="redeemReward('${reward.id}', ${reward.cost}, 'keeper')" class="btn-primary p-1 text-xs rounded-md font-sans font-semibold flex-1">
+                                    ${gameState.player1Name} Buys
+                                </button>
+                                <button onclick="redeemReward('${reward.id}', ${reward.cost}, 'nightingale')" class="btn-primary p-1 text-xs rounded-md font-sans font-semibold flex-1">
+                                    ${gameState.player2Name} Buys
+                                </button>
+                                <button onclick="deleteItem('rewards', '${reward.id}')" class="text-gray-500 hover:text-[#b05c6c] px-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    rewardsList.insertAdjacentHTML('beforeend', itemHtml);
+                });
+            }
+
+            // Update Punishments List
+            const punishmentsList = document.getElementById('punishments-list');
+            punishmentsList.innerHTML = '';
+             if (!gameState.punishments || gameState.punishments.length === 0) {
+                 punishmentsList.innerHTML = `<p class="text-center py-4 text-gray-500 italic">No punishments defined yet. All habits are being kept!</p>`;
+            } else {
+                gameState.punishments.forEach(punishment => {
+                    const itemHtml = `
+                        <div class="card p-3 rounded-lg border-l-4 border-red-600">
+                            <h4 class="text-lg font-semibold text-red-400">${punishment.title}</h4>
+                            <p class="text-sm text-gray-400 mb-3">${punishment.description}</p>
+                            <div class="flex space-x-2 justify-end">
+                                <button onclick="deleteItem('punishments', '${punishment.id}')" class="btn-secondary p-1 text-xs rounded-md font-sans font-semibold">
+                                    Mark as Applied / Remove
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    punishmentsList.insertAdjacentHTML('beforeend', itemHtml);
+                });
+            }
+        }
+
+
+        // --- FORM TOGGLE FUNCTIONS ---
+
+        window.toggleHabitForm = function() {
+            document.getElementById('habit-form').classList.toggle('hidden');
+        }
+
+        window.toggleRewardForm = function() {
+            document.getElementById('reward-form').classList.toggle('hidden');
+        }
+        
+        window.togglePunishmentForm = function() {
+            document.getElementById('punishment-form').classList.toggle('hidden');
+        }
+
+        window.showNameConfigModal = function() {
+            document.getElementById('name-config-modal').classList.remove('hidden');
+        }
+        
+        window.hideNameConfigModal = function() {
+            document.getElementById('name-config-modal').classList.add('hidden');
+        }
+
+        // --- CORE APPLICATION LOGIC (CRUD & ACTIONS) ---
+
+        // Name Configuration Action: Save
+        window.savePlayerNames = async function() {
+            const name1 = document.getElementById('player1-input').value.trim() || 'Player 1';
+            const name2 = document.getElementById('player2-input').value.trim() || 'Player 2';
+            
+            if (name1 === name2) {
+                showModal("Name Conflict", "Player names must be unique.");
+                return;
+            }
+
+            const docRef = doc(db, GAME_STATE_PATH, DOCUMENT_ID);
+            
+            try {
+                await updateDoc(docRef, {
+                    player1Name: name1,
+                    player2Name: name2
+                });
+                hideNameConfigModal();
+                showModal("Success", "Player names saved!");
+            } catch (e) {
+                handleError(e, "Failed to save player names");
+            }
+        }
+
+
+        // Habit Action: Complete
+        window.completeHabit = async function(habitId, points, assignee) {
+            const docRef = doc(db, GAME_STATE_PATH, DOCUMENT_ID);
+            
+            // 1. Reward the assigned player
+            const scoreField = assignee === 'keeper' ? 'keeperScore' : 'nightingaleScore';
+            const newScore = (gameState[scoreField] || 0) + points;
+            
+            // 2. Remove the habit (since it's a 'one-time' completion)
+            const updatedHabits = gameState.habits.filter(h => h.id !== habitId);
+
+            try {
+                await updateDoc(docRef, {
+                    [scoreField]: newScore,
+                    habits: updatedHabits
+                });
+                showModal("Habit Completed!", `${points} points awarded to ${getPlayerName(assignee)}!`);
+            } catch (e) {
+                handleError(e, "Failed to complete habit and award points");
+            }
+        }
+
+        // Reward Action: Redeem
+        window.redeemReward = async function(rewardId, cost, purchaser) {
+            const docRef = doc(db, GAME_STATE_PATH, DOCUMENT_ID);
+            
+            const scoreField = purchaser === 'keeper' ? 'keeperScore' : 'nightingaleScore';
+            const currentScore = gameState[scoreField] || 0;
+            const purchaserName = getPlayerName(purchaser);
+            
+            if (currentScore < cost) {
+                showModal("Insufficient Points", `The cost is ${cost} points, but ${purchaserName} only has ${currentScore} points.`);
+                return;
+            }
+
+            const newScore = currentScore - cost;
+            const reward = gameState.rewards.find(r => r.id === rewardId);
+            
+            try {
+                await updateDoc(docRef, {
+                    [scoreField]: newScore
+                });
+                showModal("Reward Claimed!", `${reward.title} has been redeemed by ${purchaserName}! Points spent.`);
+            } catch (e) {
+                handleError(e, "Failed to redeem reward");
+            }
+        }
+
+        // CRUD: Add Habit
+        window.addHabit = async function() {
+            const desc = document.getElementById('new-habit-desc').value;
+            const points = parseInt(document.getElementById('new-habit-points').value, 10);
+            const assignee = document.getElementById('new-habit-assignee').value;
+
+            if (!desc || isNaN(points) || points <= 0 || !assignee) {
+                showModal("Validation Error", "Please provide a description, valid points, and select an assignee.");
+                return;
+            }
+
+            const newHabit = {
+                id: generateUniqueId(),
+                description: desc,
+                points: points,
+                assignee: assignee,
+            };
+            
+            try {
+                const docRef = doc(db, GAME_STATE_PATH, DOCUMENT_ID);
+                // Use arrayUnion to ensure atomic update and avoid overwriting concurrent changes
+                await updateDoc(docRef, {
+                    habits: arrayUnion(newHabit)
+                });
+                document.getElementById('new-habit-desc').value = '';
+                document.getElementById('new-habit-points').value = '10';
+                toggleHabitForm();
+                showModal("Success", "New habit added!");
+            } catch (e) {
+                handleError(e, "Failed to add habit");
+            }
+        }
+
+        // CRUD: Add Reward
+        window.addReward = async function() {
+            const title = document.getElementById('new-reward-title').value;
+            const desc = document.getElementById('new-reward-desc').value;
+            const cost = parseInt(document.getElementById('new-reward-cost').value, 10);
+
+            if (!title || !desc || isNaN(cost) || cost <= 0) {
+                showModal("Validation Error", "Please provide a title, description, and valid cost.");
+                return;
+            }
+
+            const newReward = {
+                id: generateUniqueId(),
+                title: title,
+                description: desc,
+                cost: cost,
+            };
+
+            try {
+                const docRef = doc(db, GAME_STATE_PATH, DOCUMENT_ID);
+                await updateDoc(docRef, {
+                    rewards: arrayUnion(newReward)
+                });
+                document.getElementById('new-reward-title').value = '';
+                document.getElementById('new-reward-desc').value = '';
+                document.getElementById('new-reward-cost').value = '50';
+                toggleRewardForm();
+                showModal("Success", "New reward designed!");
+            } catch (e) {
+                handleError(e, "Failed to add reward");
+            }
+        }
+
+        // CRUD: Add Punishment
+        window.addPunishment = async function() {
+            const title = document.getElementById('new-punishment-title').value;
+            const desc = document.getElementById('new-punishment-desc').value;
+
+            if (!title || !desc) {
+                showModal("Validation Error", "Please provide a title and detailed description for the punishment.");
+                return;
+            }
+
+            const newPunishment = {
+                id: generateUniqueId(),
+                title: title,
+                description: desc,
+            };
+
+            try {
+                const docRef = doc(db, GAME_STATE_PATH, DOCUMENT_ID);
+                await updateDoc(docRef, {
+                    punishments: arrayUnion(newPunishment)
+                });
+                document.getElementById('new-punishment-title').value = '';
+                document.getElementById('new-punishment-desc').value = '';
+                togglePunishmentForm();
+                showModal("Success", "New punishment defined!");
+            } catch (e) {
+                handleError(e, "Failed to add punishment");
+            }
+        }
+
+
+        // CRUD: Delete Item (Generic)
+        window.deleteItem = async function(collectionName, itemId) {
+            const docRef = doc(db, GAME_STATE_PATH, DOCUMENT_ID);
+            // Deep copy the array to modify it locally
+            const currentItems = [...gameState[collectionName]];
+            const updatedItems = currentItems.filter(item => item.id !== itemId);
+            
+            // Check if the item exists before attempting to delete
+            if (currentItems.length === updatedItems.length) {
+                showModal("Item Not Found", `Item ID ${itemId} was not found in the ${collectionName} list.`);
+                return;
+            }
+
+            try {
+                // Use a dynamic property name for the update
+                const updatePayload = {};
+                updatePayload[collectionName] = updatedItems;
+
+                await updateDoc(docRef, updatePayload);
+                showModal("Item Removed", `Item removed from ${collectionName}.`);
+            } catch (e) {
+                handleError(e, `Failed to remove item from ${collectionName}`);
+            }
+        }
+
+
+        // Initialize on load
+        initializeFirebase();
+
+    </script>
+</body>
+</html>
