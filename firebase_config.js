@@ -1,7 +1,9 @@
-// IMPORTANT: This file is included for external deployment scenarios (like GitHub).
-// When running in the current environment, the configuration is pulled securely 
-// from global environment variables and this file is bypassed by script.js.
-const firebaseConfig = {
+/**
+ * CORRECTED: The 'var' keyword is replaced with 'window.' to explicitly
+ * attach the configuration object to the global window scope, making it
+ * accessible to the 'script.js' module.
+ */
+window.firebaseConfig = {
   apiKey: "AIzaSyAdmOIlbRx6uvgZiNat-BYI5GH-lvkiEqc",
   authDomain: "nightingaleledger-4627.firebaseapp.com",
   projectId: "nightingaleledger-4627",
