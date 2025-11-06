@@ -362,9 +362,11 @@
     </div>
 
     <!-- External JavaScript Imports -->
-    <!-- 1. The data definitions must load first -->
+    <!-- 1. The Firebase config MUST load first so the object is available globally for the main script -->
+    <script src="./firebase_config.js"></script>
+    <!-- 2. The data definitions must load second -->
     <script src="./examples.js"></script>
-    <!-- 2. The script file must load last -->
+    <!-- 3. The main script file must load last -->
     <script type="module" src="./script.js"></script>
 </body>
 </html>
