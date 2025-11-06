@@ -1,45 +1,52 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, onSnapshot, setDoc, updateDoc, collection, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { 
+    getAuth, 
+    onAuthStateChanged, 
+    createUserWithEmailAndPassword, 
+    signInWithEmailAndPassword, 
+    signOut, 
+    GoogleAuthProvider, 
+    signInWithPopup 
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { 
+    getFirestore, 
+    doc, 
+    onSnapshot, 
+    setDoc, 
+    updateDoc, 
+    collection, 
+    getDoc, 
+    query, 
+    where, 
+    getDocs, 
+    arrayUnion, 
+    arrayRemove, 
+    writeBatch
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// --- Global Variables (Provided by Canvas Environment or User File) ---
+// --- Global Variables (Provided by Canvas Environment) ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-// Local Storage Key for remembering the last connected ledger
-const LAST_LEDGER_KEY = `nightingale_ledger_code_${appId}`;
-
-// FIX: Check for the canvas string (__firebase_config) OR the global object (window.firebaseConfig)
-// The global object is created when firebase_config.js is loaded in index.html
-const configSource = typeof __firebase_config !== 'undefined' 
-    ? JSON.parse(__firebase_config) 
-    : (typeof window.firebaseConfig !== 'undefined' ? window.firebaseConfig : null);
-const firebaseConfig = configSource;
-
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+// initialAuthToken is no longer used for persistent sign-in, but kept for compatibility.
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
 // --- Firebase/App State ---
 let app;
 let db;
 let auth;
 let userId = null;
-let isAuthReady = false; // Flag to ensure DB is initialized
-const GAME_STATE_COLLECTION = 'ledgers'; // Collection where all ledger data is stored
-const LEDGER_DOC_ID_LENGTH = 6; // Length of the random code/document ID
+let userEmail = null; // Store user email for display/debugging
+let selectedLedgerId = null;
+let userRoleInLedger = null; // 'keeper' or 'nightingale'
+let GAME_STATE_PATH = null; // Full path determined by selectedLedgerId
+const GAME_STATE_DOC_ID = 'ledger_data';
+const LEDGERS_COLLECTION_PATH = `/artifacts/${appId}/public/data/ledgers`;
 
 let gameState = {
-    // Customization state
-    customization: {
-        keeperTitle: 'The Keeper',
-        nightingaleTitle: 'The Nightingale',
-        keeperName: 'User 1', // Placeholder for the actual user
-        nightingaleName: 'User 2', // Placeholder for the actual user
-        currentLayout: 'stacked', // 'stacked', 'condensed', 'tabbed'
-        currentTab: 'habits',      // 'habits', 'rewards', 'punishments'
-    },
-    // NEW: Map user IDs to their roles
-    users: {
-        keeperId: null,
-        nightingaleId: null
+    // Initial state structure (will be overwritten by Firestore data)
+    players: {
+        keeper: 'User 1',
+        nightingale: 'User 2'
     },
     scores: {
         keeper: 0,
@@ -48,779 +55,793 @@ let gameState = {
     habits: [],
     rewards: [],
     punishments: [],
-    ledgerCode: null, // The 6-character code
-    hostId: null,      // The ID of the user who created the ledger
+    // New field to track users associated with this ledger
+    users: []
 };
 
-// Tracks 'keeper', 'nightingale', or null for the current client.
-// 'viewer' is reserved for a third party who has no assigned role.
-let userRole = null; 
-
-// --- Utility Functions ---
+// --- Utility Functions (Provided in the initial setup) ---
 
 /**
- * Generates a random alphanumeric code of a specified length.
- * @param {number} length
- * @returns {string} The generated code.
- */
-function generateLedgerCode(length = LEDGER_DOC_ID_LENGTH) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
-/**
- * Returns the collection path for publicly shared ledgers.
- * @returns {string} The full Firestore path.
- */
-function getLedgerCollectionPath() {
-    // Public data for sharing with other users
-    return `/artifacts/${appId}/public/data/${GAME_STATE_COLLECTION}`;
-}
-
-/**
- * Updates the UI display of the User ID and App ID in the footer.
- */
-function updateDebugInfo() {
-    document.getElementById('current-user-id').textContent = userId || 'N/A';
-    document.getElementById('current-app-id').textContent = appId || 'N/A';
-}
-
-/**
- * Shows a custom modal dialog (instead of alert).
+ * Shows the custom modal/alert box.
  * @param {string} title - The title of the modal.
- * @param {string} message - The content message.
+ * @param {string} body - The main content/message.
  */
-function showModal(title, message) {
-    console.error(`[MODAL] ${title}: ${message}`);
-    const modalTitle = document.getElementById('modal-title');
-    const modalBody = document.getElementById('modal-body');
-    const modal = document.getElementById('custom-modal');
-
-    if (!modal || !modalTitle || !modalBody) return;
-
-    modalTitle.textContent = title;
-    modalBody.textContent = message;
-    modal.classList.remove('hidden');
-
-    const closeModal = () => {
-        modal.classList.add('hidden');
-        document.getElementById('modal-close-btn').onclick = null; // Clean up
-    };
-
-    document.getElementById('modal-close-btn').onclick = closeModal;
-}
-
-/**
- * Toggles the visibility of the Options Modal.
- */
-window.showOptionsModal = function() {
-    // Populate inputs with current state before showing
-    document.getElementById('edit-keeper-name').value = gameState.customization.keeperName;
-    document.getElementById('edit-nightingale-name').value = gameState.customization.nightingaleName;
-    document.getElementById('edit-keeper-title').value = gameState.customization.keeperTitle;
-    document.getElementById('edit-nightingale-title').value = gameState.customization.nightingaleTitle;
+window.showModal = function(title, body, actionsHtml = null) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').innerHTML = body;
+    const actionsContainer = document.getElementById('modal-actions');
+    actionsContainer.innerHTML = '';
     
-    // Highlight the current layout button
-    document.querySelectorAll('#options-modal button[id^="layout-btn-"]').forEach(btn => {
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-secondary');
-    });
-    const activeBtn = document.getElementById(`layout-btn-${gameState.customization.currentLayout}`);
-    if (activeBtn) {
-        activeBtn.classList.remove('btn-secondary');
-        activeBtn.classList.add('btn-primary');
+    // Add custom actions if provided
+    if (actionsHtml) {
+        actionsContainer.innerHTML = actionsHtml;
     }
     
-    document.getElementById('options-modal').classList.remove('hidden');
-}
-
-window.hideOptionsModal = function() {
-    document.getElementById('options-modal').classList.add('hidden');
-}
-
-/**
- * Enables the main Host/Join buttons and hides the initialization status.
- */
-function enableAppUI() {
-    // Get all buttons on the setup screen and remove 'disabled'
-    document.getElementById('host-select-btn')?.removeAttribute('disabled');
-    document.getElementById('join-select-btn')?.removeAttribute('disabled');
-    
-    // Update status message
-    const appStatus = document.getElementById('app-status');
-    if (appStatus) {
-        appStatus.textContent = 'Ready to connect or host.';
-        appStatus.classList.remove('bg-yellow-900/50', 'text-yellow-300');
-        appStatus.classList.add('bg-green-900/50', 'text-green-300');
-    }
-    console.log("App UI enabled. Buttons are now clickable.");
-}
-
-/**
- * Attempts to automatically join the last saved ledger code from local storage.
- * This runs only on initial load.
- * @param {string} code - The ledger code to attempt to join.
- */
-async function attemptAutoJoin(code) {
-    // Temporarily update status message
-    const appStatus = document.getElementById('app-status');
-    if (appStatus) {
-        appStatus.textContent = `Attempting to automatically join last ledger: ${code}...`;
-        appStatus.classList.remove('bg-green-900/50', 'text-green-300');
-        appStatus.classList.add('bg-yellow-900/50', 'text-yellow-300');
+    // Always add a close button unless custom actions are used exclusively
+    if (!actionsHtml || !actionsHtml.includes('closeModal()')) {
+        const closeButton = document.createElement('button');
+        closeButton.className = 'btn-secondary rounded-lg font-sans font-semibold';
+        closeButton.textContent = 'Close';
+        closeButton.onclick = window.closeModal;
+        actionsContainer.appendChild(closeButton);
     }
 
-    const joined = await window.joinLedger(code, true); // Pass true to skip modal on success
-    
-    if (joined) {
-        if (appStatus) appStatus.textContent = 'Successfully reconnected.';
-    } else {
-        // If auto-join failed (e.g., ledger deleted), clear the stored code
-        localStorage.removeItem(LAST_LEDGER_KEY);
-        if (appStatus) appStatus.textContent = 'Ready to connect or host.';
-    }
-    
-    // Re-enable UI regardless of outcome
-    enableAppUI();
-}
-
-/**
- * Disconnects the user from the current ledger, clears local storage, and resets the app state.
- */
-window.disconnectLedger = function() {
-    if (!gameState.ledgerCode) return;
-
-    showModal("Disconnected", `You have disconnected from ledger ${gameState.ledgerCode}. To rejoin, use the code on the setup screen.`);
-    
-    // Clear local storage and local state
-    localStorage.removeItem(LAST_LEDGER_KEY);
-    gameState.ledgerCode = null;
-    userRole = null;
-    
-    // A simple page reload is the most reliable way to reset Firebase listeners and the entire app state
-    window.location.reload(); 
-}
-
-
-// --- Firebase Interaction ---
-
-/**
- * Updates the customization part of the remote ledger document.
- * @param {object} updates - An object containing fields to update in the 'customization' map.
- */
-async function updateLedgerCustomization(updates) {
-    if (!db || !gameState.ledgerCode) {
-        showModal("Update Failed", "Not connected to a ledger. Cannot save customizations.");
-        return;
-    }
-
-    const ledgerDocRef = doc(db, getLedgerCollectionPath(), gameState.ledgerCode);
-    
-    // Construct the update object to modify nested fields
-    const updatePayload = {};
-    for (const key in updates) {
-        updatePayload[`customization.${key}`] = updates[key];
-    }
-
-    try {
-        await updateDoc(ledgerDocRef, updatePayload);
-        console.log("Customization updated successfully.");
-        // The onSnapshot listener will handle the UI update
-    } catch (error) {
-        console.error("Error updating customization:", error);
-        showModal("Save Error", `Failed to save customization changes. Error: ${error.message}`);
-    }
-}
-
-/**
- * Updates the user assignment part of the remote ledger document.
- * @param {object} updates - An object containing fields to update in the 'users' map (e.g., 'keeperId').
- */
-async function updateLedgerUsers(updates) {
-    if (!db || !gameState.ledgerCode) {
-        showModal("Update Failed", "Not connected to a ledger. Cannot assign roles.");
-        return false;
-    }
-
-    const ledgerDocRef = doc(db, getLedgerCollectionPath(), gameState.ledgerCode);
-    
-    // Construct the update object to modify nested fields
-    const updatePayload = {};
-    for (const key in updates) {
-        updatePayload[`users.${key}`] = updates[key];
-    }
-
-    try {
-        await updateDoc(ledgerDocRef, updatePayload);
-        console.log("User roles updated successfully.");
-        return true;
-    } catch (error) {
-        console.error("Error updating user roles:", error);
-        showModal("Role Assignment Error", `Failed to assign user role. Error: ${error.message}`);
-        return false;
-    }
-}
-
-/**
- * Attaches a real-time listener to the current ledger document.
- */
-function listenToLedger() {
-    if (!db || !gameState.ledgerCode) {
-        console.error("Database or Ledger Code not ready for listening.");
-        return;
-    }
-
-    const ledgerDocRef = doc(db, getLedgerCollectionPath(), gameState.ledgerCode);
-
-    onSnapshot(ledgerDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-            const remoteData = docSnap.data();
-            console.log("Current data:", remoteData);
-            
-            // Deep merge customization data
-            if (remoteData.customization) {
-                 gameState.customization = { ...gameState.customization, ...remoteData.customization };
-            }
-            // Deep merge user data
-            if (remoteData.users) {
-                 gameState.users = { ...gameState.users, ...remoteData.users };
-            }
-            // Shallow merge other top-level data
-            Object.keys(remoteData).forEach(key => {
-                if (key !== 'customization' && key !== 'users') {
-                    gameState[key] = remoteData[key];
-                }
-            });
-
-            // Check if the current user is assigned a role
-            if (gameState.users.keeperId === userId) {
-                userRole = 'keeper';
-            } else if (gameState.users.nightingaleId === userId) {
-                userRole = 'nightingale';
-            } else {
-                userRole = null;
-            }
-
-            // After state update, check if the current user needs to set their profile
-            if (gameState.ledgerCode && userRole && 
-                ((userRole === 'keeper' && gameState.customization.keeperName === 'User 1') || 
-                 (userRole === 'nightingale' && gameState.customization.nightingaleName === 'User 2'))) {
-                
-                window.showProfileModal(userRole);
-            } else {
-                // If they are all set or not connected, hide the modal
-                document.getElementById('user-profile-modal').classList.add('hidden');
-            }
-
-
-            // Re-render the UI based on the new gameState
-            renderUI();
-        } else {
-            // Document not found or has been deleted
-            console.warn("Ledger document does not exist or has been deleted.");
-            showModal("Ledger Lost", "The shared ledger has been disconnected or deleted by the host.");
-            // Force disconnection to clear state
-            window.disconnectLedger();
-        }
-    }, (error) => {
-        console.error("Error listening to ledger:", error);
-        showModal("Connection Error", "Failed to maintain real-time connection to the ledger.");
-    });
-}
-
-/**
- * Renders the UI based on the current gameState, including names, titles, and layout.
- */
-function renderUI() {
-    // --- 1. Screen Toggles ---
-    const setupScreen = document.getElementById('setup-screen');
-    const mainScreen = document.getElementById('main-dashboard');
-
-    if (gameState.ledgerCode) {
-        setupScreen.classList.add('hidden');
-        mainScreen.classList.remove('hidden');
-        document.getElementById('current-ledger-code').textContent = gameState.ledgerCode;
-    } else {
-        setupScreen.classList.remove('hidden');
-        mainScreen.classList.add('hidden');
-    }
-
-    // --- 2. Score/Title Updates ---
-    document.getElementById('keeper-score').textContent = gameState.scores.keeper;
-    document.getElementById('nightingale-score').textContent = gameState.scores.nightingale;
-    
-    // Update titles and names from customization state
-    document.getElementById('keeper-title').textContent = gameState.customization.keeperTitle;
-    document.getElementById('nightingale-title').textContent = gameState.customization.nightingaleTitle;
-    document.getElementById('keeper-name').textContent = gameState.customization.keeperName;
-    document.getElementById('nightingale-name').textContent = gameState.customization.nightingaleName;
-
-    // --- 3. Layout Rendering ---
-    const layouts = ['stacked', 'condensed', 'tabbed'];
-    layouts.forEach(layout => {
-        const el = document.getElementById(`layout-${layout}`);
-        if (el) {
-            el.classList.add('hidden');
-        }
-    });
-
-    const currentLayoutEl = document.getElementById(`layout-${gameState.customization.currentLayout}`);
-    if (currentLayoutEl) {
-        currentLayoutEl.classList.remove('hidden');
-    }
-    
-    // --- 4. Tabbed Layout Specifics ---
-    if (gameState.customization.currentLayout === 'tabbed') {
-        window.setTab(gameState.customization.currentTab, false); // Render the active tab content
-    }
-    
-    // TODO: Implement habit/reward/punishment list rendering across all relevant lists (stacked, tabbed)
-
-    // --- 5. Debug Info Update ---
-    updateDebugInfo();
-}
-
-/**
- * Attempts to host a new ledger with a randomly generated code.
- */
-window.hostNewLedger = async function() {
-    // CRITICAL: Ensure DB is ready.
-    if (!db || !isAuthReady) {
-        showModal("Initialization Error", "The application is still initializing. Please wait until the app status shows 'Ready'.");
-        return; 
-    }
-
-    const newCode = generateLedgerCode();
-    // The collection path is constructed here
-    const collectionPath = getLedgerCollectionPath(); 
-    const ledgerDocRef = doc(db, collectionPath, newCode); 
-    
-    // Host is assigned as the Keeper
-    const initialLedgerData = {
-        customization: gameState.customization, 
-        users: {
-            keeperId: userId,
-            nightingaleId: null
-        },
-        scores: { keeper: 0, nightingale: 0 }, 
-        habits: [],
-        rewards: [],
-        punishments: [],
-        ledgerCode: newCode,
-        hostId: userId,
-        createdAt: new Date().toISOString(),
-        isHosted: true,
-    };
-
-    try {
-        const docSnap = await getDoc(ledgerDocRef);
-        if (docSnap.exists()) {
-            console.warn("Hosting conflict detected. Retrying with new code.");
-            showModal("Hosting Conflict", "A ledger with this code already exists. Retrying...");
-            return hostNewLedger();
-        }
-
-        await setDoc(ledgerDocRef, initialLedgerData);
-
-        // Success! Update local state and start listening
-        gameState.ledgerCode = newCode;
-        gameState.hostId = userId;
-        userRole = 'keeper'; // Set local role
-        localStorage.setItem(LAST_LEDGER_KEY, newCode); // Persist the code
-        console.log(`Hosted new ledger successfully.`);
-        showModal("Ledger Hosted!", `Your new shared ledger code is: ${newCode}. Share this with your partner!`);
-        listenToLedger();
-        
-        // Immediately prompt the host (Keeper) to set their profile
-        window.showProfileModal('keeper');
-
-    } catch (error) {
-        console.error("Error hosting new ledger:", error);
-        showModal("Hosting Failed", `Could not create the ledger document. Error: ${error.message}`);
-    }
-}
-
-/**
- * Attempts to join an existing ledger using a code.
- * @param {string} [codeOverride=null] - Optional code to join (used for auto-join).
- * @param {boolean} [silent=false] - If true, suppresses the success modal.
- * @returns {Promise<boolean>} True if joined successfully, false otherwise.
- */
-window.joinLedger = async function(codeOverride = null, silent = false) {
-    if (!db || !isAuthReady) {
-        showModal("Initialization Error", "The application is still initializing. Please wait until the app status shows 'Ready'.");
-        return false; 
-    }
-
-    const code = codeOverride || document.getElementById('join-code').value.toUpperCase().trim();
-
-    if (code.length !== LEDGER_DOC_ID_LENGTH) {
-        if (!silent) showModal("Invalid Code", `The ledger code must be exactly ${LEDGER_DOC_ID_LENGTH} characters long.`);
-        return false;
-    }
-
-    const ledgerDocRef = doc(db, getLedgerCollectionPath(), code);
-
-    try {
-        const docSnap = await getDoc(ledgerDocRef);
-
-        if (docSnap.exists()) {
-            const remoteData = docSnap.data();
-            
-            // Check for existing assignment or available slot (Security Check)
-            let assignedRole = null;
-            let updates = {};
-            
-            const isCurrentUserKeeper = remoteData.users?.keeperId === userId;
-            const isCurrentUserNightingale = remoteData.users?.nightingaleId === userId;
-            const isKeeperTaken = !!remoteData.users?.keeperId;
-            const isNightingaleTaken = !!remoteData.users?.nightingaleId;
-
-            if (isCurrentUserKeeper) {
-                 assignedRole = 'keeper'; // User is already the Keeper
-            } else if (isCurrentUserNightingale) {
-                 assignedRole = 'nightingale'; // User is already the Nightingale
-            } else if (isKeeperTaken && isNightingaleTaken) {
-                // Both primary roles are taken - prevents a 3rd user from officially joining
-                showModal("Ledger Full", "This ledger already has both the Keeper and the Nightingale assigned. You can observe, but cannot take a role.");
-                return false;
-            } else if (!isKeeperTaken) {
-                assignedRole = 'keeper';
-                updates.keeperId = userId;
-            } else if (!isNightingaleTaken) {
-                assignedRole = 'nightingale';
-                updates.nightingaleId = userId;
-            } else {
-                // This state should not be reachable if logic is sound
-                showModal("Assignment Error", "Could not determine an open role. Ledger may be in an inconsistent state.");
-                return false;
-            }
-
-            // Assign role in Firestore if needed
-            if (Object.keys(updates).length > 0) {
-                const updateSuccess = await updateLedgerUsers(updates);
-                if (!updateSuccess) return false; 
-            }
-            
-            // Success! Update local state and start listening
-            gameState.ledgerCode = code;
-            gameState.hostId = remoteData.hostId;
-            userRole = assignedRole; // Set local role
-            localStorage.setItem(LAST_LEDGER_KEY, code); // Persist the code
-
-            if (!silent) {
-                showModal("Joined Successfully", `Connected to ledger ${code}. You are the ${assignedRole.charAt(0).toUpperCase() + assignedRole.slice(1)}.`);
-            }
-            listenToLedger();
-            
-            // Prompt the user to set their profile if using default name
-            if ((userRole === 'keeper' && remoteData.customization?.keeperName === 'User 1') || 
-                (userRole === 'nightingale' && remoteData.customization?.nightingaleName === 'User 2')) {
-                window.showProfileModal(userRole);
-            }
-            return true;
-
-        } else {
-            if (!silent) showModal("Code Not Found", `No active ledger found for code: ${code}. Please verify the code.`);
-            return false;
-        }
-    } catch (error) {
-        console.error("Error joining ledger:", error);
-        if (!silent) showModal("Joining Failed", `Could not connect to the ledger. Error: ${error.message}`);
-        return false;
-    }
-}
-
-
-// --- User Profile & Customization Functions ---
-
-/**
- * Shows the modal for the current user to set their name and title.
- * @param {'keeper'|'nightingale'} role - The role the user is setting up.
- */
-window.showProfileModal = function(role) {
-    // Only show if the profile modal is not already displayed AND we have a role
-    const modal = document.getElementById('user-profile-modal');
-    if (modal.classList.contains('hidden')) {
-        const roleEl = document.getElementById('profile-modal-role');
-        const roleName = role.charAt(0).toUpperCase() + role.slice(1);
-        
-        roleEl.textContent = roleName;
-        roleEl.classList.remove('text-yellow-300', 'text-green-400', 'text-blue-400');
-        roleEl.classList.add(role === 'keeper' ? 'text-green-400' : 'text-blue-400');
-        
-        // Set placeholder/default values
-        const currentName = gameState.customization[`${role}Name`];
-        const currentTitle = gameState.customization[`${role}Title`];
-        
-        document.getElementById('profile-name-input').value = currentName === `User ${role === 'keeper' ? '1' : '2'}` ? '' : currentName;
-        document.getElementById('profile-title-input').value = currentTitle === `The ${roleName}` ? '' : currentTitle;
-
-
-        modal.classList.remove('hidden');
-    }
-}
-
-/**
- * Saves the current user's name and title to the ledger based on their assigned role.
- */
-window.setMyProfile = function() {
-    if (!userRole) {
-        showModal("Error", "Your role is not defined. Please reconnect.");
-        return;
-    }
-    
-    const nameInput = document.getElementById('profile-name-input').value.trim();
-    const titleInput = document.getElementById('profile-title-input').value.trim();
-
-    const defaultName = userRole === 'keeper' ? 'User 1' : 'User 2';
-    const defaultTitle = userRole === 'keeper' ? 'The Keeper' : 'The Nightingale';
-
-    const newName = nameInput || defaultName;
-    const newTitle = titleInput || defaultTitle;
-    
-    if (newName.length > 30 || newTitle.length > 30) {
-        showModal("Input Too Long", "Name and Title must be 30 characters or less.");
-        return;
-    }
-
-    const updates = {};
-    updates[`${userRole}Name`] = newName;
-    updates[`${userRole}Title`] = newTitle;
-    
-    updateLedgerCustomization(updates);
-    document.getElementById('user-profile-modal').classList.add('hidden');
-}
-
-
-/**
- * Saves the user-defined names (User 1 / User 2 placeholders).
- */
-window.setPlayerName = function() {
-    const keeperName = document.getElementById('edit-keeper-name').value.trim() || 'User 1';
-    const nightingaleName = document.getElementById('edit-nightingale-name').value.trim() || 'User 2';
-    
-    if (keeperName.length > 30 || nightingaleName.length > 30) {
-        showModal("Name Too Long", "Names must be 30 characters or less.");
-        return;
-    }
-
-    updateLedgerCustomization({
-        keeperName: keeperName,
-        nightingaleName: nightingaleName
-    });
-    window.hideOptionsModal();
-}
-
-/**
- * Saves the user-defined titles (Keeper / Nightingale).
- */
-window.setPlayerTitle = function() {
-    const keeperTitle = document.getElementById('edit-keeper-title').value.trim() || 'The Keeper';
-    const nightingaleTitle = document.getElementById('edit-nightingale-title').value.trim() || 'The Nightingale';
-
-    if (keeperTitle.length > 30 || nightingaleTitle.length > 30) {
-        showModal("Title Too Long", "Titles must be 30 characters or less.");
-        return;
-    }
-
-    updateLedgerCustomization({
-        keeperTitle: keeperTitle,
-        nightingaleTitle: nightingaleTitle
-    });
-    window.hideOptionsModal();
-}
-
-/**
- * Switches and saves the current layout view.
- * @param {'stacked'|'condensed'|'tabbed'} layout - The layout key.
- */
-window.setLayout = function(layout) {
-    if (gameState.customization.currentLayout === layout) return;
-    
-    updateLedgerCustomization({
-        currentLayout: layout
-    });
-
-    // Update button styling locally immediately (will be corrected by renderUI if save fails)
-    document.querySelectorAll('#options-modal button[id^="layout-btn-"]').forEach(btn => {
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-secondary');
-    });
-    const activeBtn = document.getElementById(`layout-btn-${layout}`);
-    if (activeBtn) {
-        activeBtn.classList.remove('btn-secondary');
-        activeBtn.classList.add('btn-primary');
-    }
-}
-
-/**
- * Switches the active tab in the 'tabbed' layout.
- * @param {'habits'|'rewards'|'punishments'} tab - The tab key.
- * @param {boolean} saveToDb - Whether to save the active tab preference to the database (default: true).
- */
-window.setTab = function(tab, saveToDb = true) {
-    if (saveToDb) {
-         updateLedgerCustomization({ currentTab: tab });
-         gameState.customization.currentTab = tab; // Optimistic local update
-    }
-
-    // Toggle tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    document.getElementById(`tab-${tab}`)?.classList.add('active');
-
-    // Toggle tab content
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.add('hidden');
-    });
-    document.getElementById(`tab-content-${tab}`)?.classList.remove('hidden');
-}
-
-
-// --- Core Initialization ---
-
-/**
- * Initializes Firebase, authenticates the user, and sets up the app.
- */
-window.initApp = async function() {
-    if (!firebaseConfig) {
-        showModal("Configuration Error", "Firebase configuration is missing. Cannot start the application. Ensure firebase_config.js is loaded.");
-        return;
-    }
-
-    try {
-        // IMPORTANT: Set debug level for easier development
-        setLogLevel('debug');
-        
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app); // Synchronous initialization of DB instance
-        console.log("1. Firebase App and Firestore instance (db) created.");
-        
-        // Authentication Handler
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                userId = user.uid;
-            } else {
-                // If sign-in fails or is not complete, try anonymous sign-in
-                try {
-                    await signInAnonymously(auth);
-                } catch (anonError) {
-                    console.error("Anonymous sign-in failed:", anonError);
-                }
-            }
-
-            // Authentication is complete, DB is ready
-            isAuthReady = true;
-            console.log("2. Authentication complete. User ID:", userId);
-            
-            // NEW: Auto-load the last used ledger if a code is saved
-            const lastCode = localStorage.getItem(LAST_LEDGER_KEY);
-            if (lastCode) {
-                await attemptAutoJoin(lastCode);
-            } else {
-                // Only enable UI if no auto-join attempt was made (or if it failed, which is handled in attemptAutoJoin)
-                enableAppUI(); 
-            }
-            
-            renderUI();
-        });
-
-        // Use custom token if provided (for Canvas environment)
-        if (initialAuthToken) {
-            console.log("Attempting sign-in with custom token.");
-            await signInWithCustomToken(auth, initialAuthToken);
-        } else {
-            // If no token, the onAuthStateChanged handler above will trigger anonymous sign-in
-            console.log("No custom token provided. Relying on onAuthStateChanged for anonymous sign-in.");
-        }
-
-    } catch (error) {
-        console.error("Failed to initialize Firebase:", error);
-        showModal("Initialization Failure", "The application could not connect to Firebase services.");
-    }
+    document.getElementById('modal-container').classList.remove('hidden');
+    document.getElementById('modal-content').classList.remove('scale-90');
+    document.getElementById('modal-content').classList.add('scale-100');
 };
 
-
-// --- Event Handlers & Local State Management (Placeholders) ---
-
-window.addHabit = function() {
-    if (!gameState.ledgerCode) {
-        showModal("Not Connected", "Please host or join a ledger before defining habits.");
-        return;
-    }
-    // TODO: Implement logic to get form data and update the remote document using updateDoc()
-    showModal("Feature Not Implemented", "Habit addition logic is pending implementation.");
+/**
+ * Closes the custom modal/alert box.
+ */
+window.closeModal = function() {
+    document.getElementById('modal-content').classList.remove('scale-100');
+    document.getElementById('modal-content').classList.add('scale-90');
+    setTimeout(() => {
+        document.getElementById('modal-container').classList.add('hidden');
+    }, 300);
 };
 
-window.addReward = function() {
-    if (!gameState.ledgerCode) {
-        showModal("Not Connected", "Please host or join a ledger before defining rewards.");
-        return;
-    }
-    // TODO: Implement logic to get form data and update the remote document using updateDoc()
-    showModal("Feature Not Implemented", "Reward definition logic is pending implementation.");
-};
-
-window.addPunishment = function() {
-    if (!gameState.ledgerCode) {
-        showModal("Not Connected", "Please host or join a ledger before defining punishments.");
-        return;
-    }
-    // TODO: Implement logic to get form data and update the remote document using updateDoc()
-    showModal("Feature Not Implemented", "Punishment definition logic is pending implementation.");
-};
-
-// Helper functions for UI toggling 
-window.toggleSetup = function(section) {
-    const screens = ['host-ledger', 'join-ledger', 'define-rules', 'host-join-select'];
-    screens.forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.classList.add('hidden');
-    });
-    const targetEl = document.getElementById(section);
-    if (targetEl) targetEl.classList.remove('hidden');
-}
-
-// Placeholder for generating example data
+/**
+ * Generates an example habit, reward, or punishment into the form fields.
+ */
 window.generateExample = function(type) {
-    // Note: The 'examples.js' file is assumed to load the EXAMPLE_DATABASE globally.
     if (typeof EXAMPLE_DATABASE === 'undefined' || !EXAMPLE_DATABASE[type + 's']) {
-        showModal("Error", "Example data is not loaded correctly. Ensure examples.js is present.");
+        showModal("Error", "Example data is not loaded correctly. Ensure examples.js is loaded.");
         return;
     }
-
+    
     const examples = EXAMPLE_DATABASE[type + 's'];
     const randomIndex = Math.floor(Math.random() * examples.length);
     const example = examples[randomIndex];
 
-    // Determine which input fields to target based on the current layout
-    let suffix = '';
-    if (gameState.customization.currentLayout === 'tabbed') {
-        suffix = '-tab';
+    if (type === 'habit') {
+        document.getElementById('new-habit-desc').value = example.description;
+        document.getElementById('new-habit-points').value = example.points;
+        document.getElementById('new-habit-times').value = 1; // Default to 1
+        document.getElementById('new-habit-assignee').value = example.type;
+        window.toggleHabitForm(true); // Ensure visible
+    } else if (type === 'reward') {
+        document.getElementById('new-reward-title').value = example.title;
+        document.getElementById('new-reward-cost').value = example.cost;
+        document.getElementById('new-reward-desc').value = example.description;
+        window.toggleRewardForm(true); // Ensure visible
+    } else if (type === 'punishment') {
+        document.getElementById('new-punishment-title').value = example.title;
+        document.getElementById('new-punishment-desc').value = example.description;
+        window.togglePunishmentForm(true); // Ensure visible
+    }
+};
+
+// --- Firebase Authentication Functions ---
+
+/**
+ * Handles user sign-in or registration with email and password.
+ * @param {'signIn'|'signUp'} action 
+ */
+window.handleAuth = async function(action) {
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+
+    if (!email || !password) {
+        showModal("Error", "Please enter both email and password.");
+        return;
     }
 
-    if (type === 'habit') {
-        document.getElementById('new-habit-desc' + suffix).value = example.description;
-        document.getElementById('new-habit-points' + suffix).value = example.points;
-        document.getElementById('new-habit-times' + suffix).value = 1;
-        document.getElementById('new-habit-assignee' + suffix).value = example.type;
-    } else if (type === 'reward') {
-        document.getElementById('new-reward-title' + suffix).value = example.title;
-        document.getElementById('new-reward-cost' + suffix).value = example.cost;
-        document.getElementById('new-reward-desc' + suffix).value = example.description;
-    } else if (type === 'punishment') {
-        document.getElementById('new-punishment-title' + suffix).value = example.title;
-        document.getElementById('new-punishment-desc' + suffix).value = example.description;
+    document.getElementById('auth-status').textContent = `Processing ${action}...`;
+    try {
+        if (action === 'signUp') {
+            await createUserWithEmailAndPassword(auth, email, password);
+            showModal("Success", "Account created successfully! You are now signed in.");
+        } else {
+            await signInWithEmailAndPassword(auth, email, password);
+            showModal("Success", "Signed in successfully!");
+        }
+    } catch (error) {
+        console.error("Authentication Error:", error);
+        showModal("Authentication Failed", `Error: ${error.message}`);
+    } finally {
+        document.getElementById('auth-status').textContent = '';
+    }
+};
+
+/**
+ * Handles Google Sign-In using a popup.
+ */
+window.signInWithGoogle = async function() {
+    const provider = new GoogleAuthProvider();
+    document.getElementById('auth-status').textContent = `Signing in with Google...`;
+    try {
+        await signInWithPopup(auth, provider);
+        showModal("Success", "Signed in with Google successfully!");
+    } catch (error) {
+        console.error("Google Sign-In Error:", error);
+        // User closed the popup or other error
+        showModal("Authentication Failed", `Error: ${error.message}`);
+    } finally {
+        document.getElementById('auth-status').textContent = '';
+    }
+};
+
+/**
+ * Handles user sign out.
+ */
+window.signOutUser = async function() {
+    try {
+        await signOut(auth);
+        // Reset state and show the auth screen
+        selectedLedgerId = null;
+        userRoleInLedger = null;
+        GAME_STATE_PATH = null;
+        gameState = { players: {}, scores: { keeper: 0, nightingale: 0 }, habits: [], rewards: [], punishments: [], users: [] };
+        // The onAuthStateChanged listener handles the screen transition
+        showModal("Signed Out", "You have been successfully signed out.");
+    } catch (error) {
+        console.error("Sign Out Error:", error);
+        showModal("Sign Out Error", `Could not sign out: ${error.message}`);
+    }
+};
+
+// --- Ledger Management Functions ---
+
+/**
+ * Shows the main authentication form.
+ */
+function showAuthScreen() {
+    document.getElementById('auth-screen').classList.remove('hidden');
+    document.getElementById('auth-form').classList.remove('hidden');
+    document.getElementById('ledger-selection').classList.add('hidden');
+    document.getElementById('main-content').classList.add('hidden');
+    document.getElementById('auth-status').textContent = 'Please sign in or register.';
+}
+
+/**
+ * Fetches and displays ledgers the current user belongs to.
+ */
+window.showLedgerSelectionScreen = async function() {
+    document.getElementById('auth-screen').classList.remove('hidden');
+    document.getElementById('auth-form').classList.add('hidden');
+    document.getElementById('main-content').classList.add('hidden');
+    document.getElementById('ledger-selection').classList.remove('hidden');
+    document.getElementById('auth-status').textContent = `Welcome, ${userEmail || userId}!`;
+    document.getElementById('my-ledgers').innerHTML = ''; // Clear existing list
+    document.getElementById('ledger-loading-spinner').classList.remove('hidden');
+
+    if (!userId) {
+        showModal("Error", "User not authenticated. Please sign in again.");
+        return;
+    }
+
+    try {
+        // Query ledgers where the 'users' array contains an object with the current userId
+        const q = query(collection(db, LEDGERS_COLLECTION_PATH), where("users", "array-contains", { userId: userId }));
+        const querySnapshot = await getDocs(q);
+        
+        const ledgersListEl = document.getElementById('my-ledgers');
+        ledgersListEl.innerHTML = '';
+        
+        if (querySnapshot.empty) {
+            ledgersListEl.innerHTML = '<p class="text-center py-4 text-gray-500 italic">You are not part of any ledgers yet. Create one or join one below!</p>';
+        } else {
+            querySnapshot.forEach((doc) => {
+                const ledger = doc.data();
+                const ledgerId = doc.id;
+                
+                // Find the user's specific role in this ledger
+                const userEntry = ledger.users.find(u => u.userId === userId);
+                const role = userEntry ? userEntry.role : 'Observer'; // Should not happen if query works
+                
+                const otherUsers = ledger.users.filter(u => u.userId !== userId).length;
+                
+                const item = document.createElement('div');
+                item.className = 'list-item p-4 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors flex justify-between items-center';
+                item.onclick = () => window.selectLedger(ledgerId, role, ledger.name);
+                item.innerHTML = `
+                    <div>
+                        <p class="text-lg font-semibold">${ledger.name}</p>
+                        <p class="text-xs text-gray-400">Your Role: <span class="${role}-color font-semibold">${role.toUpperCase()}</span></p>
+                        <p class="text-xs text-gray-500">Other Users: ${otherUsers}</p>
+                    </div>
+                    <button class="text-green-400 hover:text-green-300">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                `;
+                ledgersListEl.appendChild(item);
+            });
+        }
+    } catch (error) {
+        console.error("Error fetching ledgers:", error);
+        document.getElementById('my-ledgers').innerHTML = '<p class="text-red-400 text-center py-4">Error loading ledgers. See console for details.</p>';
+    } finally {
+        document.getElementById('ledger-loading-spinner').classList.add('hidden');
+    }
+};
+
+/**
+ * Creates a brand new ledger document in Firestore.
+ */
+window.handleCreateLedger = async function() {
+    const name = document.getElementById('new-ledger-name').value.trim();
+    const role = document.getElementById('new-ledger-role').value;
+
+    if (!name || !role) {
+        showModal("Invalid Input", "Please enter a name for the new ledger and select your initial role.");
+        return;
+    }
+
+    const initialLedgerData = {
+        name: name,
+        users: [{ userId: userId, role: role }],
+        createdAt: new Date().toISOString()
+    };
+
+    try {
+        // 1. Create the main Ledger document in the public collection
+        const ledgerRef = doc(collection(db, LEDGERS_COLLECTION_PATH));
+        await setDoc(ledgerRef, initialLedgerData);
+        const newLedgerId = ledgerRef.id;
+
+        // 2. Initialize the game state document inside this new ledger's path
+        const gamePath = `${LEDGERS_COLLECTION_PATH}/${newLedgerId}/${GAME_STATE_DOC_ID}`;
+        const initialGameState = {
+            players: {
+                keeper: role === 'keeper' ? userEmail || userId : 'Other User',
+                nightingale: role === 'nightingale' ? userEmail || userId : 'Other User'
+            },
+            scores: { keeper: 0, nightingale: 0 },
+            habits: [],
+            rewards: [],
+            punishments: [],
+            users: initialLedgerData.users
+        };
+
+        await setDoc(doc(db, gamePath), initialGameState);
+
+        showModal("Ledger Created!", `Ledger "${name}" has been created. Your ID is now associated with it.`);
+        
+        // Automatically select the new ledger
+        window.selectLedger(newLedgerId, role, name);
+
+    } catch (error) {
+        console.error("Error creating ledger:", error);
+        showModal("Creation Failed", `Could not create the ledger: ${error.message}`);
+    }
+};
+
+/**
+ * Adds the current user to an existing ledger.
+ */
+window.handleJoinLedger = async function() {
+    const ledgerId = document.getElementById('join-ledger-id').value.trim();
+    const role = document.getElementById('join-ledger-role').value;
+
+    if (!ledgerId || !role) {
+        showModal("Invalid Input", "Please enter a Ledger ID and select your role.");
+        return;
+    }
+    
+    const ledgerRef = doc(db, LEDGERS_COLLECTION_PATH, ledgerId);
+
+    try {
+        const ledgerDoc = await getDoc(ledgerRef);
+        if (!ledgerDoc.exists()) {
+            showModal("Not Found", "The provided Ledger ID does not exist.");
+            return;
+        }
+
+        const ledgerData = ledgerDoc.data();
+        const userExists = ledgerData.users.some(u => u.userId === userId);
+
+        if (userExists) {
+            showModal("Already Member", "You are already a member of this ledger. You can select it from 'My Ledgers'.");
+            return;
+        }
+        
+        // Use a batch to update both the ledger metadata and the main game state in one go
+        const batch = writeBatch(db);
+
+        // 1. Update the main ledger document (metadata)
+        batch.update(ledgerRef, {
+            users: arrayUnion({ userId: userId, role: role })
+        });
+
+        // 2. Update the main game state document to reflect the new user
+        const gamePath = `${LEDGERS_COLLECTION_PATH}/${ledgerId}/${GAME_STATE_DOC_ID}`;
+        const gameRef = doc(db, gamePath);
+        
+        const newPlayerName = userEmail || userId.substring(0, 8); // Use email or truncated ID as placeholder name
+        const updateObject = {};
+        if (role === 'keeper') {
+             updateObject['players.keeper'] = newPlayerName;
+        } else {
+             updateObject['players.nightingale'] = newPlayerName;
+        }
+        updateObject['users'] = arrayUnion({ userId: userId, role: role });
+        
+        batch.update(gameRef, updateObject);
+        
+        await batch.commit();
+
+        showModal("Joined!", `Successfully joined Ledger: ${ledgerData.name} as ${role.toUpperCase()}.`);
+        
+        // Select the joined ledger
+        window.selectLedger(ledgerId, role, ledgerData.name);
+
+    } catch (error) {
+        console.error("Error joining ledger:", error);
+        showModal("Join Failed", `Could not join the ledger: ${error.message}`);
+    }
+};
+
+
+/**
+ * Sets the active ledger and transitions to the main game view.
+ * @param {string} ledgerId - The ID of the ledger document.
+ * @param {string} role - The user's role in this ledger ('keeper' or 'nightingale').
+ * @param {string} name - The name of the ledger.
+ */
+window.selectLedger = function(ledgerId, role, name) {
+    selectedLedgerId = ledgerId;
+    userRoleInLedger = role;
+    GAME_STATE_PATH = `${LEDGERS_COLLECTION_PATH}/${selectedLedgerId}/${GAME_STATE_DOC_ID}`;
+    
+    // Update display elements
+    document.getElementById('ledger-title-display').textContent = name || 'The Ledger';
+    document.getElementById('ledger-role-display').innerHTML = `Logged in as: <span class="${role}-color font-semibold">${role.toUpperCase()}</span>`;
+
+    // Hide auth screen and show main content
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('main-content').classList.remove('hidden');
+
+    // Start listening for game state changes in the new path
+    startLedgerListener();
+};
+
+
+// --- Firebase Initialization and Auth Listener ---
+
+function initializeFirebase() {
+    if (!firebaseConfig) {
+        showModal("Configuration Error", "Firebase configuration is missing. Cannot initialize application.");
+        return;
+    }
+    
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+
+    // Set up real-time authentication listener
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            // User is signed in
+            userId = user.uid;
+            userEmail = user.email || 'N/A';
+            document.getElementById('current-user-id').textContent = userId;
+            document.getElementById('current-app-id').textContent = appId;
+            
+            // Show ledger selection screen upon successful login
+            window.showLedgerSelectionScreen();
+
+        } else {
+            // User is signed out
+            userId = null;
+            userEmail = null;
+            document.getElementById('current-user-id').textContent = 'Not Signed In';
+            
+            // If the user was in a ledger, reset the UI
+            if (selectedLedgerId) {
+                // Stop listening to the previous ledger
+                // (Note: The listener cleanup logic would be here if implemented, but we rely on onSnapshot returning its own unsubscribe function)
+                selectedLedgerId = null;
+                // Re-initialize all lists to empty state
+                renderHabits([]);
+                renderRewards([]);
+                renderPunishments([]);
+            }
+            
+            // Show the authentication screen
+            showAuthScreen();
+        }
+    });
+}
+
+// --- Ledger Listeners and Handlers ---
+
+// Variable to hold the unsubscribe function for the Firestore listener
+let unsubscribeLedgerListener = null;
+
+function startLedgerListener() {
+    if (!GAME_STATE_PATH) {
+        console.error("Attempted to start listener without a valid GAME_STATE_PATH.");
+        return;
+    }
+    
+    // Stop the previous listener if it exists
+    if (unsubscribeLedgerListener) {
+        unsubscribeLedgerListener();
+    }
+
+    const docRef = doc(db, GAME_STATE_PATH);
+    
+    // Start the new listener
+    unsubscribeLedgerListener = onSnapshot(docRef, (doc) => {
+        if (doc.exists()) {
+            gameState = doc.data();
+            updateUIGameState();
+            console.log("Game state updated from Firestore.");
+        } else {
+            // This case should ideally not happen if ledger creation/joining is correct
+            console.warn("No game state found at path: " + GAME_STATE_PATH);
+            showModal("Error", "The game state for this ledger could not be found or has been deleted.");
+        }
+    }, (error) => {
+        console.error("Firestore Listener Error:", error);
+        showModal("Connection Error", `Failed to listen for updates: ${error.message}`);
+    });
+}
+
+function updateUIGameState() {
+    // 1. Update Scores
+    document.getElementById('keeper-score').textContent = gameState.scores.keeper;
+    document.getElementById('nightingale-score').textContent = gameState.scores.nightingale;
+
+    // 2. Update Player Names (using email or ID for now)
+    document.getElementById('keeper-player-name').textContent = gameState.players.keeper || 'Keeper';
+    document.getElementById('nightingale-player-name').textContent = gameState.players.nightingale || 'Nightingale';
+
+    // 3. Render Lists
+    renderHabits(gameState.habits);
+    renderRewards(gameState.rewards);
+    renderPunishments(gameState.punishments);
+}
+
+// --- Game State Update Functions ---
+
+/**
+ * Saves the current local gameState object back to Firestore.
+ */
+async function saveGameState() {
+    if (!GAME_STATE_PATH) {
+        showModal("Error", "No ledger selected. Please select a ledger first.");
+        return;
+    }
+    try {
+        await setDoc(doc(db, GAME_STATE_PATH), gameState);
+        console.log("Game state saved.");
+    } catch (error) {
+        console.error("Error saving game state:", error);
+        showModal("Save Error", `Failed to save game state: ${error.message}`);
     }
 }
 
+/**
+ * Updates a player's score and saves the state.
+ * @param {'keeper'|'nightingale'} player 
+ * @param {number} delta 
+ */
+window.updateScore = function(player, delta) {
+    if (!GAME_STATE_PATH) {
+        showModal("Error", "No ledger selected. Please select a ledger first.");
+        return;
+    }
+    gameState.scores[player] = Math.max(0, gameState.scores[player] + delta);
+    saveGameState();
+};
 
-// Start the application when the window loads
-window.onload = initApp;
+
+// --- Habit Management ---
+
+window.addHabit = function() {
+    if (!GAME_STATE_PATH) { showModal("Error", "No ledger selected."); return; }
+    const description = document.getElementById('new-habit-desc').value.trim();
+    const points = parseInt(document.getElementById('new-habit-points').value, 10);
+    const timesPerWeek = parseInt(document.getElementById('new-habit-times').value, 10);
+    const assignee = document.getElementById('new-habit-assignee').value;
+
+    if (!description || isNaN(points) || isNaN(timesPerWeek) || points <= 0 || timesPerWeek <= 0) {
+        showModal("Invalid Input", "Please provide a description, valid points, and times per week.");
+        return;
+    }
+
+    const newHabit = {
+        id: crypto.randomUUID(),
+        description: description,
+        points: points,
+        timesPerWeek: timesPerWeek,
+        assignee: assignee,
+        completions: 0 // Track weekly completions
+    };
+
+    gameState.habits.push(newHabit);
+    saveGameState();
+    window.toggleHabitForm(false); // Hide form
+};
+
+window.renderHabits = function(habits) {
+    const listEl = document.getElementById('habits-list');
+    listEl.innerHTML = ''; // Clear list
+    
+    if (habits.length === 0) {
+        listEl.innerHTML = '<p class="text-center py-4 text-gray-500 italic" id="habits-loading">No habits defined yet.</p>';
+        return;
+    }
+
+    habits.forEach(habit => {
+        const item = document.createElement('div');
+        const assigneeRole = habit.assignee;
+        const buttonClass = assigneeRole === 'keeper' ? 'keeper-color' : 'nightingale-color';
+
+        item.className = 'list-item p-4 rounded-lg flex justify-between items-center';
+        item.innerHTML = `
+            <div>
+                <p class="font-semibold">${habit.description}</p>
+                <p class="text-sm text-gray-400">
+                    <span class="${buttonClass} font-bold">${habit.points} pts</span> / <span class="text-gray-500">${habit.timesPerWeek} times/wk</span>
+                </p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button onclick="window.completeHabit('${habit.id}', '${assigneeRole}')" class="text-2xl ${buttonClass} hover:opacity-75 transition-opacity">
+                    <i class="fas fa-check-circle"></i>
+                </button>
+                <button onclick="window.removeHabit('${habit.id}')" class="text-gray-500 hover:text-red-500 transition-colors">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+        `;
+        listEl.appendChild(item);
+    });
+};
+
+window.completeHabit = function(habitId, assigneeRole) {
+    const habit = gameState.habits.find(h => h.id === habitId);
+    if (habit) {
+        // Increment score of the opposite player
+        const scoreRecipient = assigneeRole === 'keeper' ? 'nightingale' : 'keeper';
+        window.updateScore(scoreRecipient, habit.points);
+        showModal("Habit Completed!", `+${habit.points} points awarded to the ${scoreRecipient.toUpperCase()}.`);
+    } else {
+        showModal("Error", "Habit not found.");
+    }
+};
+
+window.removeHabit = function(habitId) {
+    gameState.habits = gameState.habits.filter(h => h.id !== habitId);
+    saveGameState();
+};
+
+window.toggleHabitForm = function(show) {
+    const form = document.getElementById('habit-form');
+    if (show === undefined) {
+        form.classList.toggle('hidden');
+    } else if (show) {
+        form.classList.remove('hidden');
+    } else {
+        form.classList.add('hidden');
+    }
+};
+
+
+// --- Reward Management ---
+
+window.addReward = function() {
+    if (!GAME_STATE_PATH) { showModal("Error", "No ledger selected."); return; }
+    const title = document.getElementById('new-reward-title').value.trim();
+    const cost = parseInt(document.getElementById('new-reward-cost').value, 10);
+    const description = document.getElementById('new-reward-desc').value.trim();
+
+    if (!title || !description || isNaN(cost) || cost <= 0) {
+        showModal("Invalid Input", "Please provide a title, description, and valid point cost.");
+        return;
+    }
+
+    const newReward = {
+        id: crypto.randomUUID(),
+        title: title,
+        cost: cost,
+        description: description
+    };
+
+    gameState.rewards.push(newReward);
+    saveGameState();
+    window.toggleRewardForm(false);
+};
+
+window.renderRewards = function(rewards) {
+    const listEl = document.getElementById('rewards-list');
+    listEl.innerHTML = '';
+    
+    if (rewards.length === 0) {
+        listEl.innerHTML = '<p class="text-center py-4 text-gray-500 italic" id="rewards-loading">No rewards defined yet.</p>';
+        return;
+    }
+
+    rewards.forEach(reward => {
+        const item = document.createElement('div');
+        item.className = 'list-item p-4 rounded-lg flex justify-between items-center';
+        item.innerHTML = `
+            <div>
+                <p class="font-semibold">${reward.title}</p>
+                <p class="text-sm text-gray-400">${reward.description}</p>
+            </div>
+            <button onclick="window.purchaseReward('${reward.id}', ${reward.cost})" class="btn-primary rounded-lg text-sm px-3 py-1 font-sans font-semibold">
+                ${reward.cost} pts
+            </button>
+        `;
+        listEl.appendChild(item);
+    });
+};
+
+window.purchaseReward = function(rewardId, cost) {
+    if (userRoleInLedger !== 'nightingale') {
+         showModal("Permission Denied", "Only the NIGHTINGALE can purchase rewards.");
+         return;
+    }
+    
+    const currentScore = gameState.scores.nightingale;
+    if (currentScore < cost) {
+        showModal("Insufficient Points", `You need ${cost} points to purchase this, but only have ${currentScore}.`);
+        return;
+    }
+
+    const reward = gameState.rewards.find(r => r.id === rewardId);
+    if (reward) {
+        window.showModal(
+            `Confirm Purchase: ${reward.title}`, 
+            `Are you sure you want to spend ${cost} points on this reward? Your score will drop from ${currentScore} to ${currentScore - cost}.`,
+            `<button onclick="window.confirmPurchase('${rewardId}', ${cost})" class="btn-primary rounded-lg font-sans font-semibold">Confirm</button>`
+        );
+    } else {
+        showModal("Error", "Reward not found.");
+    }
+};
+
+window.confirmPurchase = function(rewardId, cost) {
+    const rewardIndex = gameState.rewards.findIndex(r => r.id === rewardId);
+    if (rewardIndex !== -1) {
+        // Deduct points
+        window.updateScore('nightingale', -cost);
+        
+        // Remove reward (optional, but logical for one-time rewards)
+        gameState.rewards.splice(rewardIndex, 1);
+        saveGameState();
+        
+        window.closeModal();
+        showModal("Reward Claimed!", `Successfully purchased ${reward.title} for ${cost} points. Score deducted.`);
+    } else {
+        window.closeModal();
+        showModal("Error", "Reward was already claimed or not found.");
+    }
+};
+
+window.toggleRewardForm = function(show) {
+    const form = document.getElementById('reward-form');
+    if (show === undefined) {
+        form.classList.toggle('hidden');
+    } else if (show) {
+        form.classList.remove('hidden');
+    } else {
+        form.classList.add('hidden');
+    }
+};
+
+
+// --- Punishment Management ---
+
+window.addPunishment = function() {
+    if (!GAME_STATE_PATH) { showModal("Error", "No ledger selected."); return; }
+    const title = document.getElementById('new-punishment-title').value.trim();
+    const description = document.getElementById('new-punishment-desc').value.trim();
+
+    if (!title || !description) {
+        showModal("Invalid Input", "Please provide a title and description for the punishment.");
+        return;
+    }
+
+    const newPunishment = {
+        id: crypto.randomUUID(),
+        title: title,
+        description: description,
+        assignedTo: null // 'keeper' or 'nightingale'
+    };
+
+    gameState.punishments.push(newPunishment);
+    saveGameState();
+    window.togglePunishmentForm(false);
+};
+
+window.renderPunishments = function(punishments) {
+    const listEl = document.getElementById('punishments-list');
+    listEl.innerHTML = '';
+    
+    if (punishments.length === 0) {
+        listEl.innerHTML = '<p class="text-center py-4 text-gray-500 italic" id="punishments-loading">No punishments defined yet.</p>';
+        return;
+    }
+
+    punishments.forEach(punishment => {
+        const item = document.createElement('div');
+        item.className = 'list-item p-4 rounded-lg flex justify-between items-center';
+        
+        let actions = `
+            <div class="flex items-center space-x-3">
+                <button onclick="window.assignPunishment('${punishment.id}', 'keeper')" class="btn-secondary rounded-lg text-xs px-3 py-1 hover:bg-gray-600 transition-colors">Assign to Keeper</button>
+                <button onclick="window.assignPunishment('${punishment.id}', 'nightingale')" class="btn-secondary rounded-lg text-xs px-3 py-1 hover:bg-gray-600 transition-colors">Assign to Nightingale</button>
+                <button onclick="window.removePunishment('${punishment.id}')" class="text-gray-500 hover:text-red-500 transition-colors">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+        `;
+        
+        let titleClass = 'font-semibold';
+        let status = '';
+
+        if (punishment.assignedTo) {
+            titleClass = 'font-bold line-through text-gray-500';
+            status = `<p class="text-sm text-red-400 mt-1">ASSIGNED to ${punishment.assignedTo.toUpperCase()}</p>`;
+            actions = `<button onclick="window.removePunishment('${punishment.id}')" class="text-gray-500 hover:text-red-500 transition-colors">
+                <i class="fas fa-trash-alt"></i>
+            </button>`;
+        }
+        
+        item.innerHTML = `
+            <div>
+                <p class="${titleClass}">${punishment.title}</p>
+                <p class="text-sm text-gray-400">${punishment.description}</p>
+                ${status}
+            </div>
+            ${actions}
+        `;
+        listEl.appendChild(item);
+    });
+};
+
+window.assignPunishment = function(punishmentId, assignedTo) {
+    const punishment = gameState.punishments.find(p => p.id === punishmentId);
+    if (punishment) {
+        punishment.assignedTo = assignedTo;
+        saveGameState();
+        showModal("Punishment Assigned", `${punishment.title} has been assigned to the ${assignedTo.toUpperCase()}.`);
+    } else {
+        showModal("Error", "Punishment not found.");
+    }
+};
+
+window.removePunishment = function(punishmentId) {
+    gameState.punishments = gameState.punishments.filter(p => p.id !== punishmentId);
+    saveGameState();
+};
+
+window.togglePunishmentForm = function(show) {
+    const form = document.getElementById('punishment-form');
+    if (show === undefined) {
+        form.classList.toggle('hidden');
+    } else if (show) {
+        form.classList.remove('hidden');
+    } else {
+        form.classList.add('hidden');
+    }
+};
+
+
+// --- Application Start ---
+initializeFirebase();
