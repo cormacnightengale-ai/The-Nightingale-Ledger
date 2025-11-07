@@ -112,6 +112,7 @@ function toggleForm(id) {
     }
 }
 
+// Explicitly attach these to window for direct HTML calls
 window.toggleHabitForm = () => toggleForm('habit-form');
 window.toggleRewardForm = () => toggleForm('reward-form');
 window.togglePunishmentForm = () => toggleForm('punishment-form');
@@ -153,6 +154,7 @@ function renderLedger() {
                             <p class="text-sm text-green-400">${pointsText}</p>
                         </div>
                 `;
+                // NOTE: Functions called from HTML must be globally defined (e.g., window.applyHabit)
                 actionHtml = `
                     <div class="flex space-x-2 mt-2 sm:mt-0">
                         <button onclick="window.applyHabit(${index})" class="btn-success text-xs py-1 px-3">Complete</button>
@@ -169,6 +171,7 @@ function renderLedger() {
                             <p class="text-sm text-yellow-400 font-semibold">${item.cost} Points</p>
                         </div>
                 `;
+                // NOTE: Functions called from HTML must be globally defined
                 actionHtml = `
                     <div class="flex space-x-2 mt-2 sm:mt-0">
                         <select id="redeem-rewarder-${index}" class="bg-[#1a1a1d] border border-[#3c3c45] text-white text-sm rounded-lg p-1 mr-2">
@@ -188,6 +191,7 @@ function renderLedger() {
                             <p class="text-sm text-gray-400">${item.description}</p>
                         </div>
                 `;
+                // NOTE: Functions called from HTML must be globally defined
                 actionHtml = `
                     <div class="flex space-x-2 mt-2 sm:mt-0">
                         <select id="assign-punishment-${index}" class="bg-[#1a1a1d] border border-[#3c3c45] text-white text-sm rounded-lg p-1 mr-2">
@@ -281,7 +285,7 @@ window.addHabit = function() {
         return;
     }
 
-    gameState.habits.push({ desc, points, times, type });
+    gameState.habits.push({ description: desc, points, times, type });
     document.getElementById('new-habit-desc').value = '';
     document.getElementById('new-habit-points').value = 10;
     document.getElementById('new-habit-times').value = 1;
@@ -340,7 +344,7 @@ window.addPunishment = function() {
 window.deleteItem = function(listName, index) {
     showModal("Confirm Deletion", `Are you sure you want to delete this ${listName.slice(0, -1)}?`, () => {
         const item = gameState[listName][index];
-        const title = item.title || item.description;
+        const title = item.title || item.description || item.desc;
         gameState[listName].splice(index, 1);
         updateGameState(`Removed ${listName.slice(0, -1)}: ${title}`);
     }, true);
@@ -352,12 +356,14 @@ window.deleteItem = function(listName, index) {
  */
 window.applyHabit = function(index) {
     const habit = gameState.habits[index];
+    // Use item.description for the message, check if it was stored as 'desc' or 'description'
+    const habitDescription = habit.description || habit.desc; 
     const points = habit.points * habit.times;
     const playerRole = habit.type;
     const playerName = gameState.players[playerRole];
 
     gameState.scores[playerRole] = (gameState.scores[playerRole] || 0) + points;
-    updateGameState(`${playerName} completed habit: ${habit.description}`, points);
+    updateGameState(`${playerName} completed habit: ${habitDescription}`, points);
 };
 
 /**
