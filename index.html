@@ -11,6 +11,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     
     <style>
+        /* Define a CSS variable for the main accent color, defaulting to deep plum */
+        :root {
+            --accent-color: #b05c6c; 
+        }
+
         /* Base Intimate Styling */
         body {
             font-family: 'Playfair Display', serif;
@@ -23,7 +28,7 @@
         }
         h1, h2, h3 {
             font-family: 'Cinzel', serif;
-            color: #b05c6c; /* Deep romantic red/plum */
+            color: var(--accent-color); /* Use CSS variable */
         }
         .card {
             background-color: #242429; /* Darker card background */
@@ -31,12 +36,12 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
         }
         .btn-primary {
-            background-color: #b05c6c;
+            background-color: var(--accent-color); /* Use CSS variable */
             color: #fff;
             transition: background-color 0.2s;
         }
         .btn-primary:hover {
-            background-color: #a04a5a;
+            background-color: color-mix(in srgb, var(--accent-color) 90%, black);
         }
         .btn-secondary {
             background-color: #3c3c45;
@@ -58,7 +63,7 @@
 </head>
 <body class="antialiased">
 
-    <!-- Custom Modal Structure -->
+    <!-- Custom Modal Structure (Alert/Confirm) -->
     <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-70 hidden items-center justify-center z-50 p-4">
         <div id="custom-modal" class="card p-6 rounded-xl w-full max-w-sm">
             <h3 id="modal-title" class="text-xl font-bold mb-4">Title</h3>
@@ -70,12 +75,79 @@
         </div>
     </div>
 
+    <!-- Profile/Options Modal -->
+    <div id="profile-modal-overlay" class="fixed inset-0 bg-black bg-opacity-70 hidden items-center justify-center z-50 p-4">
+        <div class="card p-6 rounded-xl w-full max-w-lg">
+            <h3 class="text-3xl font-cinzel mb-6 text-center">Ledger Settings</h3>
+            
+            <div class="space-y-6">
+                <!-- Player Name Settings -->
+                <div class="border border-[#3c3c45] p-4 rounded-lg">
+                    <h4 class="text-xl font-cinzel mb-3">Player Names</h4>
+                    <p class="text-sm text-gray-500 mb-4">Customize the names for the two roles in your shared ledger.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="keeper-name-input" class="block text-sm font-medium mb-1" id="keeper-name-label">Keeper Name</label>
+                            <input type="text" id="keeper-name-input" class="input-field w-full p-2 rounded text-sm">
+                        </div>
+                        <div>
+                            <label for="nightingale-name-input" class="block text-sm font-medium mb-1" id="nightingale-name-label">Nightingale Name</label>
+                            <input type="text" id="nightingale-name-input" class="input-field w-full p-2 rounded text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Theme Color Selector -->
+                <div class="border border-[#3c3c45] p-4 rounded-lg">
+                    <h4 class="text-xl font-cinzel mb-3">Theme Color</h4>
+                    <p class="text-sm text-gray-500 mb-4">Select the primary accent color for your ledger.</p>
+                    <div class="flex space-x-4">
+                        <!-- Color Palettes (Hex values are set in JS) -->
+                        <div class="flex items-center space-x-2">
+                            <input type="radio" name="theme-color" id="color-plum" value="#b05c6c" class="hidden peer" checked>
+                            <label for="color-plum" class="w-8 h-8 rounded-full bg-[#b05c6c] border-2 border-transparent peer-checked:border-white transition cursor-pointer" title="Plum"></label>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <input type="radio" name="theme-color" id="color-emerald" value="#5cb080" class="hidden peer">
+                            <label for="color-emerald" class="w-8 h-8 rounded-full bg-[#5cb080] border-2 border-transparent peer-checked:border-white transition cursor-pointer" title="Emerald"></label>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <input type="radio" name="theme-color" id="color-gold" value="#d4a35c" class="hidden peer">
+                            <label for="color-gold" class="w-8 h-8 rounded-full bg-[#d4a35c] border-2 border-transparent peer-checked:border-white transition cursor-pointer" title="Gold"></label>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <input type="radio" name="theme-color" id="color-sapphire" value="#5c87b0" class="hidden peer">
+                            <label for="color-sapphire" class="w-8 h-8 rounded-full bg-[#5c87b0] border-2 border-transparent peer-checked:border-white transition cursor-pointer" title="Sapphire"></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="window.closeProfileModal()" class="btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
+                <button onclick="window.saveProfileSettings()" class="btn-primary px-4 py-2 rounded-lg text-sm">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+
     <!-- Main Content Wrapper (Hidden until Firebase auth is ready) -->
     <div id="main-content-wrapper" class="hidden container mx-auto p-4 sm:p-8">
 
-        <header class="text-center mb-12">
-            <h1 class="text-5xl sm:text-7xl font-cinzel mb-4">The Nightingale Ledger</h1>
-            <p class="text-gray-400 text-lg sm:text-xl">Shared Habit and Reward System</p>
+        <header class="text-center mb-12 flex justify-between items-center">
+            <!-- Left buffer for centering -->
+            <div class="w-10 md:w-16"></div> 
+            
+            <!-- Title -->
+            <div class="flex-grow">
+                <h1 class="text-5xl sm:text-7xl font-cinzel mb-2">The Nightingale Ledger</h1>
+                <p class="text-gray-400 text-lg sm:text-xl">Shared Habit and Reward System</p>
+            </div>
+            
+            <!-- Options Button -->
+            <button onclick="window.openProfileModal()" class="btn-secondary px-3 py-2 text-sm rounded-lg w-10 md:w-16">
+                <svg class="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            </button>
         </header>
 
         <!-- Scoreboard and Player Info -->
@@ -84,18 +156,18 @@
                 
                 <!-- Keeper (Habit Builder) -->
                 <div class="card p-6 rounded-xl">
-                    <h2 class="text-2xl font-cinzel mb-2">Keeper (Habit Builder)</h2>
-                    <p class="text-sm text-gray-500 mb-4">Focuses on discipline and point generation.</p>
-                    <p class="text-4xl font-bold" id="keeper-score">0</p>
-                    <p class="mt-4 text-sm">User: <span id="keeper-user-id">Loading...</span></p>
+                    <h2 class="text-2xl font-cinzel mb-2" id="keeper-name-display">Keeper</h2>
+                    <p class="text-sm text-gray-500 mb-4">Habit Builder & Point Generator.</p>
+                    <p class="text-5xl font-bold" id="keeper-score">0</p>
+                    <p class="mt-4 text-sm">Your ID: <span id="current-user-id-short">...</span></p>
                 </div>
 
                 <!-- Nightingale (Reward Consumer) -->
                 <div class="card p-6 rounded-xl">
-                    <h2 class="text-2xl font-cinzel mb-2">Nightingale (Reward Consumer)</h2>
-                    <p class="text-sm text-gray-500 mb-4">Focuses on motivation and point spending.</p>
-                    <p class="text-4xl font-bold" id="nightingale-score">0</p>
-                    <p class="mt-4 text-sm">User: <span id="nightingale-user-id">Loading...</span></p>
+                    <h2 class="text-2xl font-cinzel mb-2" id="nightingale-name-display">Nightingale</h2>
+                    <p class="text-sm text-gray-500 mb-4">Reward Consumer & Motivator.</p>
+                    <p class="text-5xl font-bold" id="nightingale-score">0</p>
+                    <p class="mt-4 text-sm">Ledger ID: <span id="current-app-id">...</span></p>
                 </div>
             </div>
         </section>
@@ -192,7 +264,7 @@
 
             </section>
 
-            <!-- Column 3: History Log (NEW/UPDATED SECTION) -->
+            <!-- Column 3: History Log -->
             <section class="lg:col-span-1">
                 <h3 class="text-2xl font-cinzel mb-4">History Log</h3>
                 <div id="history-log-container" class="card p-4 rounded-xl h-96 overflow-y-auto">
@@ -206,7 +278,8 @@
         
         <!-- Debug/Footer Info -->
         <footer class="mt-12 pt-6 border-t border-[#3c3c45] text-center text-xs text-gray-500">
-            <p>User ID: <span id="current-user-id">...</span> | App ID: <span id="current-app-id">...</span></p>
+            <p>Your Full User ID: <span id="current-user-id">...</span> | App ID: <span id="current-app-id-full">...</span></p>
+            <p class="mt-1 text-gray-600">Note: The Nightingale role is the point consumer, Keeper is the point builder.</p>
         </footer>
 
     </div>
