@@ -723,7 +723,7 @@ window.addNewReward = function() {
     updateGameState(newState, `New Reward cataloged: "${title}" (${cost} Pts).`);
     window.toggleRewardForm(false);
 }
-window.addNewPunishment = function() {.
+window.addNewPunishment = function() {
     const title = document.getElementById('new-punishment-title').value.trim();
     const desc = document.getElementById('new-punishment-desc').value.trim();
     if (!title || !desc) {
