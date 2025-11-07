@@ -27,7 +27,6 @@ export function renderHabit(habit, today = new Date()) {
       <div class="habit-title">${habit.name}</div>
       <div class="habit-desc">${habit.description}</div>
       <div class="habit-repeat">Repeat: ${habit.repeat === 'none' ? 'No' : habit.repeat}</div>
-      <!-- display days if custom repeat -->
       ${habit.repeat === 'custom' ? `<div class="habit-days">Days: ${habit.days.join(', ')}</div>` : ''}
       <button class="complete-habit-btn" data-id="${habit.id}" ${!due ? 'disabled' : ''}>
         ${habit.completed && due ? 'Completed!' : 'Mark as Done'}
@@ -36,7 +35,7 @@ export function renderHabit(habit, today = new Date()) {
   `;
 }
 
+// Mark a habit completed/revert for today
 export function toggleHabitCompletion(id) {
-  // Find and update habit by id
-  // In repeated habits, mark as completed for today, but do not delete from list
+  // Implement habit lookup and state update
 }
