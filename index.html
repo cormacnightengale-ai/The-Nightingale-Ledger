@@ -110,7 +110,10 @@
         <div class="card p-6 w-full max-w-sm" onclick="event.stopPropagation()">
             <h3 id="modal-title" class="text-xl mb-4">Title</h3>
             <p id="modal-message" class="text-gray-300 mb-6"></p>
-            <button class="btn-secondary w-full" onclick="document.getElementById('custom-modal').classList.add('hidden')">Close</button>
+            <div class="flex space-x-4">
+                <button id="modal-confirm-btn" class="btn-danger w-1/2 hidden">Confirm</button>
+                <button id="modal-cancel-btn" class="btn-secondary w-full" onclick="document.getElementById('custom-modal').classList.add('hidden')">Close</button>
+            </div>
         </div>
     </div>
     
