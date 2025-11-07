@@ -53,6 +53,7 @@ let gameState = { ...defaultGameState };
  */
 function lockApp(message) {
     document.getElementById('app-content').classList.add('hidden');
+    document.getElementById('login-modal').classList.add('hidden'); // Hide modal too
     document.getElementById('loading-screen').classList.remove('hidden');
     document.getElementById('loading-message').innerHTML = `<p class="text-error font-bold text-3xl mb-4">ACCESS DENIED</p><p>${message}</p>`;
 }
@@ -142,7 +143,9 @@ function setupLedgerListener() {
             renderLedger();
             
             document.getElementById('loading-screen').classList.add('hidden');
-            document.getElementById('app-content').classList.remove('hidden');
+            
+            // NEW: Show the login modal after data is loaded and rendered
+            window.showLoginModal();
 
         } else {
             // Document does not exist, create the initial document with current user as Nightingale
@@ -161,6 +164,28 @@ function setupLedgerListener() {
         console.error("Firestore Listener Error:", error);
         document.getElementById('auth-error-message').textContent = `Data Error: Could not load ledger. ${error.message}`;
     });
+}
+
+/**
+ * Transitions from the loading screen to the login modal, displaying user context.
+ */
+window.showLoginModal = function() {
+    const currentUserProfile = gameState.profiles[userId];
+    const slotText = currentUserProfile.slot.charAt(0).toUpperCase() + currentUserProfile.slot.slice(1);
+    
+    document.getElementById('login-user-status').textContent = 
+        `You are currently logged in as ${currentUserProfile.name} (${slotText}).`;
+
+    document.getElementById('loading-screen').classList.add('hidden');
+    document.getElementById('login-modal').classList.remove('hidden');
+}
+
+/**
+ * Initiates the main application view after the user clicks the 'Begin Session' button.
+ */
+window.startSession = function() {
+    document.getElementById('login-modal').classList.add('hidden');
+    document.getElementById('app-content').classList.remove('hidden');
 }
 
 /**
@@ -187,6 +212,7 @@ async function updateGameState(updates) {
 
 function renderLedger() {
     
+    // Find which user is assigned to which slot based on the profile data
     const nightingaleUser = gameState.authorizedUsers.find(uid => gameState.profiles[uid]?.slot === 'nightingale');
     const keeperUser = gameState.authorizedUsers.find(uid => gameState.profiles[uid]?.slot === 'keeper');
 
@@ -504,6 +530,7 @@ window.signOutUser = async function() {
     try {
         await signOut(auth);
         document.getElementById('app-content').classList.add('hidden');
+        document.getElementById('login-modal').classList.add('hidden'); // Hide modal too
         document.getElementById('loading-screen').classList.remove('hidden');
         document.getElementById('loading-message').textContent = "Successfully signed out. Reloading session...";
 
@@ -655,7 +682,7 @@ window.prepareDelete = async function(collectionName, index) {
 
 window.fillHabitForm = function() {
     if (!window.EXAMPLE_DATABASE) { 
-        document.getElementById('auth-error-message').textContent = "Example database not loaded.";
+        console.error("Example database not loaded.");
         return; 
     }
     const examples = EXAMPLE_DATABASE.habits;
@@ -670,7 +697,7 @@ window.fillHabitForm = function() {
 
 window.fillRewardForm = function() {
     if (!window.EXAMPLE_DATABASE) { 
-        document.getElementById('auth-error-message').textContent = "Example database not loaded.";
+        console.error("Example database not loaded.");
         return; 
     }
     const examples = EXAMPLE_DATABASE.rewards;
@@ -684,7 +711,7 @@ window.fillRewardForm = function() {
 
 window.fillPunishmentForm = function() {
     if (!window.EXAMPLE_DATABASE) { 
-        document.getElementById('auth-error-message').textContent = "Example database not loaded.";
+        console.error("Example database not loaded.");
         return; 
     }
     const examples = EXAMPLE_DATABASE.punishments;
