@@ -8,7 +8,7 @@ setLogLevel('Debug');
 
 // --- Global Variables (Canvas Environment) ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-// Check window.firebaseConfig as a fallback if __firebase_config is not defined (for local testing)
+// Check window.firebaseConfig as a fallback if __firebase_config is not defined
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : (window.firebaseConfig || {});
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
@@ -18,14 +18,16 @@ let db;
 let auth;
 let userId = null;
 let userSlot = null; // 'nightingale' or 'keeper'
+// Path for public/shared data: artifacts/{appId}/public/data/ledger_state/{docId}
 const GAME_STATE_DOC_PATH = `artifacts/${appId}/public/data/ledger_state/ledger_data`; 
 const GAME_STATE_DOC_ID = 'ledger_data';
 
-// Updated gameState structure for two-user lock and rich profiles
+// New default profile structure
 const defaultProfile = {
     name: 'New Partner',
-    avatarUrl: '',
-    status: 'Neutral'
+    avatarUrl: '', // Placeholder URL is set in HTML/render logic if this is blank
+    status: 'Neutral',
+    slot: null // 'nightingale' or 'keeper'
 };
 
 const defaultGameState = {
@@ -49,7 +51,7 @@ let gameState = { ...defaultGameState }; // Start with defaults
 function lockApp(message) {
     document.getElementById('app-content').classList.add('hidden');
     document.getElementById('loading-screen').classList.remove('hidden');
-    document.getElementById('loading-message').innerHTML = `<p class="text-error font-bold">${message}</p>`;
+    document.getElementById('loading-message').innerHTML = `<p class="text-error font-bold text-3xl mb-4">ACCESS DENIED</p><p>${message}</p>`;
 }
 
 /**
@@ -72,13 +74,10 @@ async function initializeAppAndAuth() {
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 userId = user.uid;
-                
-                // Display User ID in header and modal (Login Status)
+                // Display User ID in settings
                 document.getElementById('current-user-id').textContent = userId;
-                document.getElementById('current-user-id-modal').textContent = userId;
-                document.getElementById('current-app-id-modal').textContent = appId;
 
-                console.log(`User authenticated with ID: ${userId}. App ID: ${appId}`);
+                console.log(`User authenticated with ID: ${userId}.`);
                 
                 // Once authenticated, start listening to the public game state
                 setupLedgerListener();
@@ -117,7 +116,8 @@ function setupLedgerListener() {
                     // New user joining the ledger
                     users = [...users, userId];
                     const slot = users.length === 1 ? 'nightingale' : 'keeper';
-                    const newProfile = { ...defaultProfile, name: slot.charAt(0).toUpperCase() + slot.slice(1), slot: slot };
+                    const name = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const newProfile = { ...defaultProfile, name: name, slot: slot };
                     profiles[userId] = newProfile;
                     
                     userSlot = slot;
@@ -126,16 +126,24 @@ function setupLedgerListener() {
                     console.log(`New user joining as: ${slot}`);
                 } else {
                     // Third user attempting to join
-                    lockApp(`ACCESS DENIED: The ledger is currently locked to two authorized users.`);
+                    lockApp(`The ledger is currently locked to two authorized users. Your User ID (${userId}) is not permitted.`);
                     return; 
                 }
             } else {
-                // Authorized user, determine their slot
-                userSlot = profiles[userId] ? profiles[userId].slot : (users[0] === userId ? 'nightingale' : 'keeper');
+                // Authorized user, ensure profile exists and determine their slot
+                if (!profiles[userId]) {
+                    // If user is authorized but profile is missing (shouldn't happen often)
+                    userSlot = users.length === 1 ? 'nightingale' : (users[0] === userId ? 'nightingale' : 'keeper');
+                    const name = userSlot.charAt(0).toUpperCase() + userSlot.slice(1);
+                    profiles[userId] = { ...defaultProfile, name: name, slot: userSlot };
+                    requiresUpdate = true;
+                } else {
+                    userSlot = profiles[userId].slot;
+                }
             }
 
             if (requiresUpdate) {
-                // Update Firestore if we added a new authorized user
+                // Update Firestore if we added a new authorized user or fixed a profile
                 await updateDoc(docRef, { authorizedUsers: users, profiles: profiles });
             }
 
@@ -194,11 +202,13 @@ async function updateGameState(updates) {
  */
 function renderLedger() {
     
+    // Find the current authorized users based on their assigned slot
     const nightingaleUser = gameState.authorizedUsers.find(uid => gameState.profiles[uid]?.slot === 'nightingale');
     const keeperUser = gameState.authorizedUsers.find(uid => gameState.profiles[uid]?.slot === 'keeper');
 
-    const nightingaleProfile = nightingaleUser ? gameState.profiles[nightingaleUser] : { name: 'Nightingale', avatarUrl: '', status: 'Neutral' };
-    const keeperProfile = keeperUser ? gameState.profiles[keeperUser] : { name: 'Keeper', avatarUrl: '', status: 'Neutral' };
+    // Get profiles, use default fallbacks if missing
+    const nightingaleProfile = nightingaleUser ? gameState.profiles[nightingaleUser] : { ...defaultProfile, name: 'Nightingale', slot: 'nightingale' };
+    const keeperProfile = keeperUser ? gameState.profiles[keeperUser] : { ...defaultProfile, name: 'Keeper', slot: 'keeper' };
 
     // 1. Update Scoreboard Names, Avatars, Statuses and Scores
     
@@ -206,13 +216,15 @@ function renderLedger() {
     document.getElementById('nightingale-name-display').textContent = nightingaleProfile.name;
     document.getElementById('nightingale-status-display').textContent = nightingaleProfile.status;
     document.getElementById('nightingale-score').textContent = gameState.nightingaleScore || 0;
-    document.getElementById('nightingale-avatar').src = nightingaleProfile.avatarUrl || `https://placehold.co/64x64/B05C6C/ffffff?text=${nightingaleProfile.name.charAt(0)}`;
+    // Avatar fallback: if URL is empty, use a placeholder with the first letter of the name
+    document.getElementById('nightingale-avatar').src = nightingaleProfile.avatarUrl || `https://placehold.co/48x48/B05C6C/ffffff?text=${nightingaleProfile.name.charAt(0)}`;
     
     // Keeper
     document.getElementById('keeper-name-display').textContent = keeperProfile.name;
     document.getElementById('keeper-status-display').textContent = keeperProfile.status;
     document.getElementById('keeper-score').textContent = gameState.keeperScore || 0;
-    document.getElementById('keeper-avatar').src = keeperProfile.avatarUrl || `https://placehold.co/64x64/5C8CB0/ffffff?text=${keeperProfile.name.charAt(0)}`;
+    // Avatar fallback
+    document.getElementById('keeper-avatar').src = keeperProfile.avatarUrl || `https://placehold.co/48x48/5C8CB0/ffffff?text=${keeperProfile.name.charAt(0)}`;
 
     // Update forms with current names
     const nightingaleOption = document.querySelector('#new-habit-type option[value="nightingale"]');
@@ -267,7 +279,7 @@ function renderHabits(nightingaleProfile, keeperProfile) {
 }
 
 /**
- * Renders the Reward list. (Render logic remains the same)
+ * Renders the Reward list.
  */
 function renderRewards() {
     const listEl = document.getElementById('rewards-list');
@@ -298,7 +310,7 @@ function renderRewards() {
 }
 
 /**
- * Renders the Punishment list. (Render logic remains the same)
+ * Renders the Punishment list.
  */
 function renderPunishments() {
     const listEl = document.getElementById('punishments-list');
@@ -324,7 +336,7 @@ function renderPunishments() {
     `).join('');
 }
 
-// --- Customization & Options Functions ---
+// --- Customization & Options Functions (New and Updated) ---
 
 /**
  * Toggles the visibility of the Edit Profile Modal.
@@ -338,7 +350,7 @@ window.toggleEditProfileModal = function(show) {
  */
 window.openEditProfile = function(slot) {
     if (userSlot !== slot) {
-        document.getElementById('auth-error-message').textContent = `ERROR: You can only edit your own profile (${userSlot}).`;
+        document.getElementById('auth-error-message').textContent = `ERROR: You can only edit your own profile (${userSlot.charAt(0).toUpperCase() + userSlot.slice(1)}).`;
         setTimeout(() => document.getElementById('auth-error-message').textContent = '', 3000);
         return;
     }
@@ -390,12 +402,7 @@ window.saveProfileChanges = async function(event) {
     window.toggleEditProfileModal(false);
 }
 
-
-// --- Utility Functions (Keep Existing) ---
-
-window.toggleCodesModal = function(show) {
-    document.getElementById('codes-modal').classList.toggle('hidden', !show);
-}
+// --- Utility Functions ---
 
 window.toggleSettingsPanel = function(show) {
     const panel = document.getElementById('settings-panel');
@@ -406,24 +413,48 @@ window.toggleSettingsPanel = function(show) {
 }
 
 window.resetLedger = async function() {
-    if (confirm("WARNING: This will erase ALL scores, habits, rewards, and punishments for both partners. Are you sure?")) {
-        // Reset the document entirely, including authorized users and profiles
-        const resetState = { 
-            ...defaultGameState, 
-            authorizedUsers: [userId], // Keep current user authorized
-            profiles: { [userId]: { ...defaultProfile, name: userSlot.charAt(0).toUpperCase() + userSlot.slice(1), slot: userSlot } } 
-        };
-        const docRef = doc(db, GAME_STATE_DOC_PATH);
-        try {
-            await setDoc(docRef, resetState);
-            document.getElementById('auth-error-message').textContent = "Ledger successfully reset!";
-        } catch (error) {
-            console.error("Error resetting ledger:", error);
-            document.getElementById('auth-error-message').textContent = `Error resetting ledger: ${error.message}`;
+    // Replaced confirm() with an internal message since confirm() is blocked
+    document.getElementById('auth-error-message').textContent = "ARE YOU SURE? Click 'Reset All Ledger Data' again within 5 seconds to confirm permanent reset.";
+    setTimeout(() => {
+        if (document.getElementById('auth-error-message').textContent.includes("confirm permanent reset")) {
+            document.getElementById('auth-error-message').textContent = "";
         }
-        setTimeout(() => document.getElementById('auth-error-message').textContent = '', 4000);
-        window.toggleSettingsPanel(false);
-    }
+    }, 5000);
+    
+    const confirmationButton = document.querySelector('#settings-panel button.bg-red-500');
+    
+    // Use a temporary listener to handle the double-click confirmation
+    const confirmReset = async () => {
+        // If the confirmation message is currently displayed, proceed with reset
+        if (document.getElementById('auth-error-message').textContent.includes("confirm permanent reset")) {
+            confirmationButton.removeEventListener('click', confirmReset);
+
+            // Reset the document entirely, keeping only the current two authorized users
+            const resetState = { 
+                ...defaultGameState, 
+                authorizedUsers: gameState.authorizedUsers, // Keep existing authorized users
+                profiles: gameState.authorizedUsers.reduce((acc, uid) => {
+                    const slot = gameState.profiles[uid]?.slot || (uid === gameState.authorizedUsers[0] ? 'nightingale' : 'keeper');
+                    acc[uid] = { ...defaultProfile, name: slot.charAt(0).toUpperCase() + slot.slice(1), slot: slot };
+                    return acc;
+                }, {})
+            };
+
+            const docRef = doc(db, GAME_STATE_DOC_PATH);
+            try {
+                await setDoc(docRef, resetState);
+                document.getElementById('auth-error-message').textContent = "Ledger successfully reset!";
+            } catch (error) {
+                console.error("Error resetting ledger:", error);
+                document.getElementById('auth-error-message').textContent = `Error resetting ledger: ${error.message}`;
+            }
+            setTimeout(() => document.getElementById('auth-error-message').textContent = '', 4000);
+            window.toggleSettingsPanel(false);
+        }
+    };
+    
+    // Attach the temporary listener
+    confirmationButton.addEventListener('click', confirmReset, { once: true });
 }
 
 window.signOutUser = async function() {
@@ -431,7 +462,6 @@ window.signOutUser = async function() {
         await signOut(auth);
         document.getElementById('app-content').classList.add('hidden');
         document.getElementById('loading-screen').classList.remove('hidden');
-        document.getElementById('current-user-id').textContent = 'Signed Out';
         document.getElementById('loading-message').textContent = "Successfully signed out. Reloading session...";
 
         setTimeout(() => {
@@ -444,46 +474,8 @@ window.signOutUser = async function() {
     }
 }
 
-window.copyToClipboard = function(elementId) {
-    const textToCopy = document.getElementById(elementId).textContent;
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(textToCopy).then(() => {
-            document.getElementById('auth-error-message').textContent = `Copied App ID to clipboard!`;
-            setTimeout(() => document.getElementById('auth-error-message').textContent = '', 2000);
-        }).catch(err => {
-            const textArea = document.createElement("textarea");
-            textArea.value = textToCopy;
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                document.getElementById('auth-error-message').textContent = `Copied App ID to clipboard!`;
-            } catch (err) {
-                document.getElementById('auth-error-message').textContent = `Copy failed. Manually select and copy: ${textToCopy}`;
-            }
-            document.body.removeChild(textArea);
-            setTimeout(() => document.getElementById('auth-error-message').textContent = '', 3000);
-        });
-    } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = textToCopy;
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-            document.execCommand('copy');
-            document.getElementById('auth-error-message').textContent = `Copied App ID to clipboard!`;
-        } catch (err) {
-            document.getElementById('auth-error-message').textContent = `Copy failed. Manually select and copy: ${textToCopy}`;
-        }
-        document.body.removeChild(textArea);
-        setTimeout(() => document.getElementById('auth-error-message').textContent = '', 3000);
-    }
-}
 
-
-// --- Action Functions (Keep Existing) ---
+// --- Action Functions ---
 
 window.toggleHabitForm = function(show) { document.getElementById('habit-form').classList.toggle('hidden', !show); }
 window.toggleRewardForm = function(show) { document.getElementById('reward-form').classList.toggle('hidden', !show); }
@@ -514,6 +506,7 @@ window.claimReward = async function(index, cost) {
         return;
     }
     
+    // Determine which partner's score to deduct first (prioritize Nightingale)
     let nightingaleDeduction = Math.min(cost, gameState.nightingaleScore);
     let keeperDeduction = cost - nightingaleDeduction;
 
@@ -522,6 +515,11 @@ window.claimReward = async function(index, cost) {
         keeperScore: gameState.keeperScore - keeperDeduction
     };
     
+    // Remove the reward from the list
+    const rewards = [...gameState.rewards];
+    rewards.splice(index, 1);
+    updates.rewards = rewards;
+
     await updateGameState(updates);
 }
 
@@ -575,36 +573,90 @@ window.saveNewPunishment = async function(event) {
     }
 }
 
-// --- Deletion Functions (Keep Existing) ---
+// --- Deletion Functions ---
 
 window.deleteHabit = async function(index) {
-    if (confirm("Are you sure you want to delete this habit?")) {
-        const habits = [...gameState.habits];
-        habits.splice(index, 1);
-        await updateGameState({ habits });
+    document.getElementById('auth-error-message').textContent = "Confirm deletion: Click the 'Delete Habit' icon again within 3 seconds to confirm.";
+    setTimeout(() => {
+        if (document.getElementById('auth-error-message').textContent.includes("Confirm deletion")) {
+            document.getElementById('auth-error-message').textContent = "";
+        }
+    }, 3000);
+    
+    // Find the button and attach a temporary listener for confirmation
+    const deleteButtons = document.querySelectorAll('button[title="Delete Habit"]');
+    if (deleteButtons.length > index) {
+        const confirmDelete = async () => {
+            if (document.getElementById('auth-error-message').textContent.includes("Confirm deletion")) {
+                const habits = [...gameState.habits];
+                habits.splice(index, 1);
+                await updateGameState({ habits });
+                document.getElementById('auth-error-message').textContent = "Habit deleted.";
+                setTimeout(() => document.getElementById('auth-error-message').textContent = '', 2000);
+            }
+        };
+        // Re-attaching the listener on the correct button
+        deleteButtons[index].removeEventListener('click', confirmDelete); // Remove old listener if it exists
+        deleteButtons[index].addEventListener('click', confirmDelete, { once: true });
     }
 }
 
 window.deleteReward = async function(index) {
-    if (confirm("Are you sure you want to delete this reward?")) {
-        const rewards = [...gameState.rewards];
-        rewards.splice(index, 1);
-        await updateGameState({ rewards });
+    document.getElementById('auth-error-message').textContent = "Confirm deletion: Click the 'Delete Reward' icon again within 3 seconds to confirm.";
+    setTimeout(() => {
+        if (document.getElementById('auth-error-message').textContent.includes("Confirm deletion")) {
+            document.getElementById('auth-error-message').textContent = "";
+        }
+    }, 3000);
+    
+    const deleteButtons = document.querySelectorAll('button[title="Delete Reward"]');
+    if (deleteButtons.length > index) {
+        const confirmDelete = async () => {
+            if (document.getElementById('auth-error-message').textContent.includes("Confirm deletion")) {
+                const rewards = [...gameState.rewards];
+                rewards.splice(index, 1);
+                await updateGameState({ rewards });
+                document.getElementById('auth-error-message').textContent = "Reward deleted.";
+                setTimeout(() => document.getElementById('auth-error-message').textContent = '', 2000);
+            }
+        };
+        deleteButtons[index].removeEventListener('click', confirmDelete);
+        deleteButtons[index].addEventListener('click', confirmDelete, { once: true });
     }
 }
 
 window.deletePunishment = async function(index) {
-    if (confirm("Are you sure you want to delete this punishment?")) {
-        const punishments = [...gameState.punishments];
-        punishments.splice(index, 1);
-        await updateGameState({ punishments });
+    document.getElementById('auth-error-message').textContent = "Confirm deletion: Click the 'Remove Punishment' icon again within 3 seconds to confirm.";
+    setTimeout(() => {
+        if (document.getElementById('auth-error-message').textContent.includes("Confirm deletion")) {
+            document.getElementById('auth-error-message').textContent = "";
+        }
+    }, 3000);
+    
+    const deleteButtons = document.querySelectorAll('button[title="Remove Punishment"]');
+    if (deleteButtons.length > index) {
+        const confirmDelete = async () => {
+            if (document.getElementById('auth-error-message').textContent.includes("Confirm deletion")) {
+                const punishments = [...gameState.punishments];
+                punishments.splice(index, 1);
+                await updateGameState({ punishments });
+                document.getElementById('auth-error-message').textContent = "Punishment removed.";
+                setTimeout(() => document.getElementById('auth-error-message').textContent = '', 2000);
+            }
+        };
+        deleteButtons[index].removeEventListener('click', confirmDelete);
+        deleteButtons[index].addEventListener('click', confirmDelete, { once: true });
     }
 }
 
-// --- Example Fillers (Keep Existing) ---
+
+// --- Example Fillers (Fixed to use custom error message instead of window.alert) ---
 
 window.fillHabitForm = function() {
-    if (!window.EXAMPLE_DATABASE) { console.error("Example database not loaded."); return; }
+    if (!window.EXAMPLE_DATABASE) { 
+        document.getElementById('auth-error-message').textContent = "Example database not loaded.";
+        return; 
+    }
     const examples = EXAMPLE_DATABASE.habits;
     if (examples.length === 0) return;
     const example = examples[Math.floor(Math.random() * examples.length)];
@@ -615,7 +667,10 @@ window.fillHabitForm = function() {
 }
 
 window.fillRewardForm = function() {
-    if (!window.EXAMPLE_DATABASE) { console.error("Example database not loaded."); return; }
+    if (!window.EXAMPLE_DATABASE) { 
+        document.getElementById('auth-error-message').textContent = "Example database not loaded.";
+        return; 
+    }
     const examples = EXAMPLE_DATABASE.rewards;
     if (examples.length === 0) return;
     const example = examples[Math.floor(Math.random() * examples.length)];
@@ -626,7 +681,10 @@ window.fillRewardForm = function() {
 }
 
 window.fillPunishmentForm = function() {
-    if (!window.EXAMPLE_DATABASE) { console.error("Example database not loaded."); return; }
+    if (!window.EXAMPLE_DATABASE) { 
+        document.getElementById('auth-error-message').textContent = "Example database not loaded.";
+        return; 
+    }
     const examples = EXAMPLE_DATABASE.punishments;
     if (examples.length === 0) return;
     const example = examples[Math.floor(Math.random() * examples.length)];

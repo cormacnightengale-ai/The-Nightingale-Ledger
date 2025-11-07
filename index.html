@@ -33,13 +33,10 @@
             border: 1px solid #3c3c45;
             border-radius: 0.5rem;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
-            transition: transform 0.2s;
         }
         .score-card {
-            @apply flex-1 p-4 rounded-xl shadow-lg cursor-pointer transition duration-300 transform hover:scale-[1.01] flex flex-col items-center justify-center;
-            background-color: #111111;
-            border: 2px solid;
-            min-height: 150px;
+            /* Minimal styling for clickable area */
+            @apply flex-1 p-4 rounded-xl shadow-lg cursor-pointer transition duration-300 transform hover:scale-[1.01];
         }
         .text-nightingale { color: #b05c6c; }
         .bg-nightingale { background-color: #b05c6c; }
@@ -71,42 +68,12 @@
             color: #e34c4c;
         }
         .avatar {
-            @apply w-16 h-16 object-cover rounded-full border-2 p-0.5 mb-2 shadow-xl;
+            @apply w-12 h-12 object-cover rounded-full border-2 p-0.5 mb-1;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
         }
     </style>
 </head>
 <body class="antialiased">
-
-    <!-- Modal for Ledger Codes (CRITICAL INFO) -->
-    <div id="codes-modal" class="fixed inset-0 bg-black bg-opacity-80 z-50 hidden flex items-center justify-center p-4" onclick="window.toggleCodesModal(false)">
-        <div class="bg-[#1a1a1a] p-8 rounded-2xl shadow-2xl border border-[#3c3c45] max-w-lg w-full" onclick="event.stopPropagation()">
-            <h3 class="text-3xl font-cinzel text-[#b05c6c] mb-6 text-center border-b border-[#3c3c45] pb-2">Shared Ledger Codes</h3>
-            <p class="text-gray-400 mb-6 text-sm">Use these codes to ensure both partners are connected to the same ledger. **Share the App ID** with your partner.</p>
-
-            <div class="space-y-4">
-                <!-- App ID -->
-                <div class="bg-gray-900 p-4 rounded-lg border border-gray-700">
-                    <p class="font-bold text-gray-300 flex justify-between items-center">
-                        Shared Ledger ID (App ID)
-                        <button onclick="window.copyToClipboard('current-app-id-modal')" class="text-xs text-blue-400 hover:text-blue-200 ml-4"><i class="fa-solid fa-copy"></i> Copy</button>
-                    </p>
-                    <code id="current-app-id-modal" class="break-all text-sm font-mono text-yellow-400">...</code>
-                </div>
-                
-                <!-- User ID -->
-                <div class="bg-gray-900 p-4 rounded-lg border border-gray-700">
-                    <p class="font-bold text-gray-300">Your Unique User ID (Login Status)</p>
-                    <code id="current-user-id-modal" class="break-all text-sm font-mono text-gray-500">...</code>
-                </div>
-            </div>
-
-            <div class="flex justify-end mt-8">
-                <button onclick="window.toggleCodesModal(false)" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-md transition-colors">
-                    Close
-                </button>
-            </div>
-        </div>
-    </div>
 
     <!-- Modal for Profile Editing (New Customization) -->
     <div id="edit-profile-modal" class="fixed inset-0 bg-black bg-opacity-80 z-50 hidden flex items-center justify-center p-4" onclick="window.toggleEditProfileModal(false)">
@@ -118,15 +85,15 @@
                 <div class="space-y-4">
                     <!-- Name -->
                     <div>
-                        <label for="edit-profile-name" class="block text-sm font-medium text-gray-400">Partner Name</label>
+                        <label for="edit-profile-name" class="block text-sm font-medium text-gray-400">Partner Name / Title</label>
                         <input type="text" id="edit-profile-name" required class="w-full mt-1 p-2 bg-gray-900 border border-gray-700 rounded-md text-gray-200 focus:ring-nightingale focus:border-nightingale">
                     </div>
 
                     <!-- Avatar URL -->
                     <div>
                         <label for="edit-avatar-url" class="block text-sm font-medium text-gray-400">Avatar Image URL (Link)</label>
-                        <input type="url" id="edit-avatar-url" placeholder="Paste image link here" class="w-full mt-1 p-2 bg-gray-900 border border-gray-700 rounded-md text-gray-200 focus:ring-nightingale focus:border-nightingale">
-                        <p class="text-xs text-gray-500 mt-1">Use a direct link to an image (e.g., JPEG, PNG).</p>
+                        <input type="url" id="edit-avatar-url" placeholder="Paste image link here or leave blank" class="w-full mt-1 p-2 bg-gray-900 border border-gray-700 rounded-md text-gray-200 focus:ring-nightingale focus:border-nightingale">
+                        <p class="text-xs text-gray-500 mt-1">Provide a direct link to an image (e.g., JPEG, PNG).</p>
                     </div>
 
                     <!-- Status/Mood -->
@@ -140,6 +107,7 @@
                             <option value="Busy">Busy 💻</option>
                             <option value="Happy">Happy 😊</option>
                             <option value="Moody">Moody 😡</option>
+                            <option value="In Love">In Love ❤️</option>
                         </select>
                     </div>
                 </div>
@@ -168,41 +136,34 @@
                 
                 <div class="flex items-center space-x-3 mt-2 sm:mt-0">
                     
-                    <!-- Share Codes Button (The original "Options/Ledger Codes" request) -->
-                    <button onclick="window.toggleCodesModal(true)" class="btn-primary text-sm bg-gray-700 hover:bg-gray-600">
-                        <i class="fas fa-link mr-2"></i>Share Codes
-                    </button>
-                    
-                    <!-- Settings Button (The "Customization" and other "Options" request) -->
+                    <!-- Settings Button -->
                     <button id="settings-toggle-btn" onclick="window.toggleSettingsPanel(true)" class="btn-primary text-sm bg-gray-700 hover:bg-gray-600">
                         <i class="fas fa-cog mr-2"></i>Settings
                     </button>
-
-                    <!-- User Status (Addressing "login" confusion) -->
-                    <div class="text-right text-xs">
-                        <p class="text-gray-400">User ID</p>
-                        <p id="current-user-id" class="text-xs font-mono text-gray-500 truncate w-24 sm:w-auto" title="Your unique ID for this session"></p>
-                    </div>
                 </div>
             </div>
             
-            <!-- Scoreboard (Now with Avatars and click functionality) -->
-            <div id="scoreboard" class="flex flex-col sm:flex-row justify-around text-center mt-6 text-xl space-y-4 sm:space-y-0 sm:space-x-4">
+            <!-- Scoreboard (Now clickable for profile edit) -->
+            <div id="scoreboard" class="flex flex-col sm:flex-row justify-around text-center mt-6 text-xl space-y-4 sm:space-y-0 sm:space-x-8">
                 
                 <!-- Nightingale Score Card -->
-                <div id="nightingale-card" onclick="window.openEditProfile('nightingale')" class="score-card text-nightingale border-nightingale">
-                    <img id="nightingale-avatar" class="avatar border-nightingale" src="https://placehold.co/64x64/2d2d2d/c5c5c5?text=N" onerror="this.onerror=null; this.src='https://placehold.co/64x64/2d2d2d/c5c5c5?text=N';">
-                    <p class="text-sm font-cinzel text-gray-400" id="nightingale-status-display">Neutral</p>
-                    <p class="font-cinzel text-4xl" id="nightingale-score">0</p>
-                    <p class="text-xl font-cinzel" id="nightingale-name-display">Nightingale</p>
+                <div id="nightingale-card" onclick="window.openEditProfile('nightingale')" class="score-card text-nightingale">
+                    <div class="flex flex-col items-center">
+                        <img id="nightingale-avatar" class="avatar border-nightingale" src="https://placehold.co/48x48/B05C6C/ffffff?text=N" onerror="this.onerror=null; this.src='https://placehold.co/48x48/B05C6C/ffffff?text=N';">
+                        <p class="text-sm font-cinzel text-gray-400" id="nightingale-status-display">Neutral</p>
+                    </div>
+                    <p class="font-cinzel text-6xl" id="nightingale-score">0</p>
+                    <p class="text-3xl font-cinzel" id="nightingale-name-display">Nightingale</p>
                 </div>
 
                 <!-- Keeper Score Card -->
-                <div id="keeper-card" onclick="window.openEditProfile('keeper')" class="score-card text-keeper border-keeper">
-                    <img id="keeper-avatar" class="avatar border-keeper" src="https://placehold.co/64x64/2d2d2d/c5c5c5?text=K" onerror="this.onerror=null; this.src='https://placehold.co/64x64/2d2d2d/c5c5c5?text=K';">
-                    <p class="text-sm font-cinzel text-gray-400" id="keeper-status-display">Neutral</p>
-                    <p class="font-cinzel text-4xl" id="keeper-score">0</p>
-                    <p class="text-xl font-cinzel" id="keeper-name-display">Keeper</p>
+                <div id="keeper-card" onclick="window.openEditProfile('keeper')" class="score-card text-keeper">
+                    <div class="flex flex-col items-center">
+                        <img id="keeper-avatar" class="avatar border-keeper" src="https://placehold.co/48x48/5C8CB0/ffffff?text=K" onerror="this.onerror=null; this.src='https://placehold.co/48x48/5C8CB0/ffffff?text=K';">
+                        <p class="text-sm font-cinzel text-gray-400" id="keeper-status-display">Neutral</p>
+                    </div>
+                    <p class="font-cinzel text-6xl" id="keeper-score">0</p>
+                    <p class="text-3xl font-cinzel" id="keeper-name-display">Keeper</p>
                 </div>
             </div>
         </header>
@@ -218,7 +179,7 @@
                 <!-- 1. Administrative Actions (Logout/Reset) -->
                 <div class="border border-gray-700 p-4 rounded-md">
                     <h3 class="text-xl font-cinzel text-gray-300 mb-3">Administrative Actions</h3>
-                    <p class="text-sm text-gray-500 mb-4">Use these options with caution. They affect the shared ledger state.</p>
+                    <p class="text-sm text-gray-500 mb-4">Use these options with caution. They affect the shared ledger state. Your ID: <code id="current-user-id" class="text-gray-400">...</code></p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <button onclick="window.signOutUser()" class="btn-primary bg-red-800 hover:bg-red-700 text-white">
                             <i class="fa-solid fa-door-open mr-2"></i>Sign Out / New Session
@@ -366,7 +327,7 @@
 
     </div>
 
-    <!-- Initial Loading Screen -->
+    <!-- Initial Loading Screen (For initial connection and Unauthorized Access) -->
     <div id="loading-screen" class="min-h-screen flex flex-col items-center justify-center p-6 text-center">
         <h1 class="text-4xl sm:text-6xl font-cinzel text-[#b05c6c] mb-6 neon-title">The Nightingale Ledger</h1>
         <div class="text-lg text-gray-400 max-w-xl mx-auto space-y-4">
