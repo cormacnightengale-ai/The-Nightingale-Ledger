@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>The Nightingale Ledger: Shared Ledger System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:wght@400;700&display=swap" rel="stylesheet">
@@ -24,6 +24,7 @@
             --color-shadow-primary: rgba(176, 92, 108, 0.2);
             --color-shadow-secondary: rgba(127, 0, 255, 0.1);
         }
+        /* Basic layout and theme */
         body {
             font-family: 'Cormorant Garamond', serif;
             background-image: linear-gradient(to bottom, var(--color-bg-start), var(--color-bg-end));
@@ -117,30 +118,83 @@
         }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 4px; }
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+
+        /* Accessibility helpers */
+        .sr-only {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+        .skip-link {
+            position: absolute;
+            left: 1rem;
+            top: 0.5rem;
+            background: rgba(0,0,0,0.6);
+            color: var(--color-text-base);
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            z-index: 60;
+            transform: translateY(-120%);
+            transition: transform 0.2s ease;
+        }
+        .skip-link:focus {
+            transform: translateY(0);
+            outline: 3px solid var(--color-accent-secondary);
+            outline-offset: 2px;
+        }
+        :focus-visible {
+            outline: 3px solid var(--color-accent-secondary);
+            outline-offset: 2px;
+        }
+
+        /* Respect reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            .neon-title { animation: none !important; }
+            .card, .glowing-btn { transition: none !important; transform: none !important; }
+        }
+
+        /* Modal overlay accessible sizing */
+        .modal-overlay {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
     </style>
 </head>
 <body class="p-4 sm:p-8">
 
+    <a href="#main-content" class="skip-link sr-only">Skip to main content</a>
+
     <!-- Modal for Alerts and Prompts -->
-    <div id="custom-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300">
+    <div id="custom-modal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300 modal-overlay"
+         role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-message" tabindex="-1" aria-hidden="true">
         <div class="card p-6 w-11/12 max-w-lg space-y-4" id="modal-content-container">
             <h3 id="modal-title" class="text-xl font-bold border-b pb-2 border-gray-700">Notice</h3>
-            <p id="modal-message" class="text-gray-300"></p>
+            <p id="modal-message" class="text-gray-300" role="status" aria-live="polite"></p>
             <input type="text" id="modal-input" class="w-full hidden" placeholder="Enter value...">
             <div class="flex justify-end space-x-4">
-                <button id="modal-cancel-btn" class="glowing-btn px-4 py-2 text-sm rounded hidden">Cancel</button>
-                <button id="modal-confirm-btn" class="glowing-btn px-4 py-2 text-sm rounded">OK</button>
+                <button id="modal-cancel-btn" data-modal-close class="glowing-btn px-4 py-2 text-sm rounded hidden" aria-label="Cancel">Cancel</button>
+                <button id="modal-confirm-btn" class="glowing-btn px-4 py-2 text-sm rounded" aria-label="Confirm">OK</button>
             </div>
         </div>
     </div>
 
     <!-- Settings Modal -->
-    <div id="settings-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300">
+    <div id="settings-modal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300 modal-overlay"
+         role="dialog" aria-modal="true" aria-labelledby="settings-modal-title" aria-describedby="settings-modal-desc" tabindex="-1" aria-hidden="true">
         <div class="card p-6 w-11/12 max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 class="text-xl font-bold border-b pb-2 border-gray-700">Theme &amp; Customization</h3>
+            <h3 id="settings-modal-title" class="text-xl font-bold border-b pb-2 border-gray-700">Theme &amp; Customization</h3>
+            <p id="settings-modal-desc" class="sr-only">Customize colors and theme presets for your ledger.</p>
             <div class="space-y-2">
                 <label for="theme-preset-select" class="block text-sm font-medium">Theme Preset</label>
-                <select id="theme-preset-select" class="w-full" onchange="window.handlePresetChange()">
+                <select id="theme-preset-select" class="w-full" onchange="window.handlePresetChange()" aria-label="Theme preset">
                     <option value="Nightingale">Nightingale (Dark)</option>
                     <option value="Daybreak">Daybreak (Light)</option>
                     <option value="Grove">Grove (Green)</option>
@@ -151,60 +205,62 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                 <div class="space-y-2">
                     <label for="color-bg-start" class="block text-sm font-medium">Background Start</label>
-                    <input type="color" id="color-bg-start" class="w-full" oninput="window.setPresetToCustom()">
+                    <input type="color" id="color-bg-start" class="w-full" oninput="window.setPresetToCustom()" aria-label="Background start color">
                 </div>
                 <div class="space-y-2">
                     <label for="color-bg-end" class="block text-sm font-medium">Background End</label>
-                    <input type="color" id="color-bg-end" class="w-full" oninput="window.setPresetToCustom()">
+                    <input type="color" id="color-bg-end" class="w-full" oninput="window.setPresetToCustom()" aria-label="Background end color">
                 </div>
                 <div class="space-y-2">
                     <label for="color-card-bg" class="block text-sm font-medium">Card Background</label>
-                    <input type="color" id="color-card-bg" class="w-full" oninput="window.setPresetToCustom()">
+                    <input type="color" id="color-card-bg" class="w-full" oninput="window.setPresetToCustom()" aria-label="Card background color">
                 </div>
                 <div class="space-y-2">
                     <label for="color-text-base" class="block text-sm font-medium">Base Text</label>
-                    <input type="color" id="color-text-base" class="w-full" oninput="window.setPresetToCustom()">
+                    <input type="color" id="color-text-base" class="w-full" oninput="window.setPresetToCustom()" aria-label="Base text color">
                 </div>
                 <div class="space-y-2">
                     <label for="color-accent-primary" class="block text-sm font-medium">Primary Accent (Headers)</label>
-                    <input type="color" id="color-accent-primary" class="w-full" oninput="window.setPresetToCustom()">
+                    <input type="color" id="color-accent-primary" class="w-full" oninput="window.setPresetToCustom()" aria-label="Primary accent color">
                 </div>
                 <div class="space-y-2">
                     <label for="color-accent-secondary" class="block text-sm font-medium">Secondary Accent (Buttons)</label>
-                    <input type="color" id="color-accent-secondary" class="w-full" oninput="window.setPresetToCustom()">
+                    <input type="color" id="color-accent-secondary" class="w-full" oninput="window.setPresetToCustom()" aria-label="Secondary accent color">
                 </div>
                 <div class="space-y-2">
                     <label for="color-score" class="block text-sm font-medium">Score Text</label>
-                    <input type="color" id="color-score" class="w-full" oninput="window.setPresetToCustom()">
+                    <input type="color" id="color-score" class="w-full" oninput="window.setPresetToCustom()" aria-label="Score text color">
                 </div>
             </div>
             <div class="flex justify-end space-x-4 pt-4">
-                <button onclick="window.closeSettingsModal()" class="glowing-btn px-4 py-2 text-sm rounded">Cancel</button>
-                <button onclick="window.saveSettings()" class="glowing-btn px-4 py-2 text-sm rounded">Save</button>
+                <button onclick="window.closeSettingsModal()" class="glowing-btn px-4 py-2 text-sm rounded" aria-label="Cancel settings">Cancel</button>
+                <button onclick="window.saveSettings()" class="glowing-btn px-4 py-2 text-sm rounded" aria-label="Save settings">Save</button>
             </div>
         </div>
     </div>
 
     <!-- Edit Profile Modal -->
-    <div id="profile-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300">
+    <div id="profile-modal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300 modal-overlay"
+         role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" aria-describedby="profile-modal-desc" tabindex="-1" aria-hidden="true">
         <div class="card p-6 w-11/12 max-w-lg space-y-4">
             <h3 id="profile-modal-title" class="text-xl font-bold border-b pb-2 border-gray-700">Edit Profile</h3>
+            <p id="profile-modal-desc" class="sr-only">Edit player name, title, and theme color.</p>
             <input type="hidden" id="profile-modal-player-key" value="">
             <div class="space-y-2">
                 <label for="profile-modal-name" class="block text-sm font-medium">Name</label>
-                <input type="text" id="profile-modal-name" class="w-full">
+                <input type="text" id="profile-modal-name" class="w-full" aria-label="Player name">
             </div>
             <div class="space-y-2">
                 <label for="profile-modal-title" class="block text-sm font-medium">Title (e.g., Keeper, Muse)</label>
-                <input type="text" id="profile-modal-title" class="w-full">
+                <input type="text" id="profile-modal-title" class="w-full" aria-label="Player title">
             </div>
             <div class="space-y-2">
                 <label for="profile-modal-color" class="block text-sm font-medium">Theme Color</label>
-                <input type="color" id="profile-modal-color" class="w-full">
+                <input type="color" id="profile-modal-color" class="w-full" aria-label="Player theme color">
             </div>
             <div class="flex justify-end space-x-4">
-                <button onclick="window.closeProfileModal()" class="glowing-btn px-4 py-2 text-sm rounded">Cancel</button>
-                <button onclick="window.savePlayerProfile()" class="glowing-btn px-4 py-2 text-sm rounded">Save</button>
+                <button onclick="window.closeProfileModal()" class="glowing-btn px-4 py-2 text-sm rounded" aria-label="Cancel profile edit">Cancel</button>
+                <button onclick="window.savePlayerProfile()" class="glowing-btn px-4 py-2 text-sm rounded" aria-label="Save profile">Save</button>
             </div>
         </div>
     </div>
@@ -215,24 +271,24 @@
         <div class="text-lg text-gray-400 max-w-xl mx-auto space-y-4">
             <p>Connecting...</p>
             <!-- This message is updated by auth state -->
-            <p id="auth-error-message" class="text-gray-400"></p>
+            <p id="auth-error-message" class="text-gray-400" role="status" aria-live="polite"></p>
         </div>
     </div>
 
     <!-- Auth Screen (Hidden by default) -->
-    <div id="auth-screen" class="min-h-screen hidden items-center justify-center p-6">
-        <div class="card p-8 w-full max-w-md space-y-6">
-            <h2 class="text-3xl text-center">Welcome</h2>
-            <p id="auth-form-error" class="text-center text-red-400 hidden"></p>
+    <div id="auth-screen" class="min-h-screen hidden items-center justify-center p-6" aria-hidden="true">
+        <div class="card p-8 w-full max-w-md space-y-6" role="region" aria-labelledby="auth-heading">
+            <h2 id="auth-heading" class="text-3xl text-center">Welcome</h2>
+            <p id="auth-form-error" class="text-center text-red-400 hidden" role="alert" aria-live="assertive"></p>
             
             <!-- Email/Pass Form -->
             <div class="space-y-4">
-                <input type="email" id="auth-email" placeholder="Email" class="w-full">
-                <input type="password" id="auth-password" placeholder="Password (6+ characters)" class="w-full">
+                <input type="email" id="auth-email" placeholder="Email" class="w-full" aria-label="Email" required>
+                <input type="password" id="auth-password" placeholder="Password (6+ characters)" class="w-full" aria-label="Password" minlength="6" required>
             </div>
             <div class="flex flex-col sm:flex-row gap-4">
-                <button onclick="window.signInWithEmail()" class="glowing-btn px-4 py-2 rounded w-full">Sign In</button>
-                <button onclick="window.createAccountWithEmail()" class="glowing-btn glowing-btn-create px-4 py-2 rounded w-full">Create Account</button>
+                <button onclick="window.signInWithEmail()" class="glowing-btn px-4 py-2 rounded w-full" aria-label="Sign in with email">Sign In</button>
+                <button onclick="window.createAccountWithEmail()" class="glowing-btn glowing-btn-create px-4 py-2 rounded w-full" aria-label="Create account with email">Create Account</button>
             </div>
 
             <!-- Separator -->
@@ -243,47 +299,47 @@
             </div>
 
             <!-- Google Sign-In -->
-            <button onclick="window.signInWithGoogle()" class="glowing-btn glowing-btn-google px-4 py-2 rounded w-full flex items-center justify-center">
-                <i class="fab fa-google mr-2"></i> Sign in with Google
+            <button onclick="window.signInWithGoogle()" class="glowing-btn glowing-btn-google px-4 py-2 rounded w-full flex items-center justify-center" aria-label="Sign in with Google">
+                <i class="fab fa-google mr-2" aria-hidden="true"></i> Sign in with Google
             </button>
         </div>
     </div>
 
     <!-- Ledger Selection Screen (Hidden by default) -->
-    <div id="ledger-select-screen" class="min-h-screen hidden items-center justify-center p-6">
-        <div class="card p-8 w-full max-w-xl space-y-6">
-            <h2 class="text-3xl text-center">Select Your Ledger</h2>
+    <div id="ledger-select-screen" class="min-h-screen hidden items-center justify-center p-6" aria-hidden="true">
+        <div class="card p-8 w-full max-w-xl space-y-6" role="region" aria-labelledby="ledger-select-heading">
+            <h2 id="ledger-select-heading" class="text-3xl text-center">Select Your Ledger</h2>
             <p class="text-center text-gray-400">Welcome! You're not connected to a ledger. Host a new one or join your partner's.</p>
             
-            <p id="ledger-form-error" class="text-center text-red-400 hidden"></p>
+            <p id="ledger-form-error" class="text-center text-red-400 hidden" role="alert" aria-live="assertive"></p>
 
             <!-- Host/Join Form -->
             <div class="space-y-4">
                 <label for="ledger-code-input" class="block text-sm font-medium">Ledger Code</label>
-                <input type="text" id="ledger-code-input" placeholder="e.g., 'OurVow' or 'PartnerCode'" class="w-full">
+                <input type="text" id="ledger-code-input" placeholder="e.g., 'OurVow' or 'PartnerCode'" class="w-full" aria-label="Ledger code">
                 <p class="text-xs text-gray-400">This code is case-sensitive. Create a new one or enter your partner's code.</p>
             </div>
             <div class="flex flex-col sm:flex-row gap-4">
-                <button onclick="window.hostLedger()" class="glowing-btn glowing-btn-create px-4 py-2 rounded w-full">Host New Ledger</button>
-                <button onclick="window.joinLedger()" class="glowing-btn px-4 py-2 rounded w-full">Join Ledger</button>
+                <button onclick="window.hostLedger()" class="glowing-btn glowing-btn-create px-4 py-2 rounded w-full" aria-label="Host new ledger">Host New Ledger</button>
+                <button onclick="window.joinLedger()" class="glowing-btn px-4 py-2 rounded w-full" aria-label="Join ledger">Join Ledger</button>
             </div>
         </div>
     </div>
 
     <!-- Main Content Area (Hidden by default) -->
-    <div id="main-content" class="container mx-auto max-w-5xl hidden">
+    <div id="main-content" class="container mx-auto max-w-5xl hidden" tabindex="-1" aria-hidden="true">
         
         <!-- Header -->
         <header class="text-center py-6 mb-8 relative">
             <h1 class="text-4xl sm:text-6xl font-bold neon-title mb-4">The Nightingale Ledger</h1>
             <p class="text-lg italic text-gray-400">A Shared Vow of Discipline and Delight</p>
-            <button onclick="window.openSettingsModal()" class="absolute top-4 right-0 sm:right-4 glowing-btn p-3 rounded-full text-xl leading-none">
-                <i class="fas fa-cog"></i>
+            <button id="open-settings-btn" onclick="window.openSettingsModal()" class="absolute top-4 right-0 sm:right-4 glowing-btn p-3 rounded-full text-xl leading-none" aria-label="Open settings">
+                <i class="fas fa-cog" aria-hidden="true"></i>
             </button>
         </header>
 
         <!-- Player Scores Section -->
-        <section class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12" role="region" aria-label="Player scores">
             <!-- Keeper Card -->
             <div id="keeper-card" class="card p-6 text-center">
                 <div class="flex items-center justify-center space-x-2 mb-2">
@@ -291,7 +347,7 @@
                 </div>
                 <div class="flex items-center justify-center space-x-2 mb-2">
                     <p id="player-name-keeper" class="text-xl font-semibold inline-block">User 1</p>
-                    <button onclick="window.openEditProfileModal('keeper')" class="edit-btn"><i class="fas fa-edit"></i></button>
+                    <button onclick="window.openEditProfileModal('keeper')" class="edit-btn" aria-label="Edit Keeper profile"><i class="fas fa-edit" aria-hidden="true"></i></button>
                 </div>
                 <p id="score-keeper" class="player-score">0</p>
             </div>
@@ -302,7 +358,7 @@
                 </div>
                 <div class="flex items-center justify-center space-x-2 mb-2">
                     <p id="player-name-nightingale" class="text-xl font-semibold inline-block">User 2</p>
-                    <button onclick="window.openEditProfileModal('nightingale')" class="edit-btn"><i class="fas fa-edit"></i></button>
+                    <button onclick="window.openEditProfileModal('nightingale')" class="edit-btn" aria-label="Edit Nightingale profile"><i class="fas fa-edit" aria-hidden="true"></i></button>
                 </div>
                 <p id="score-nightingale" class="player-score">0</p>
             </div>
@@ -310,88 +366,88 @@
         
         <!-- Tabbed Interface -->
         <div class="mb-12">
-            <div class="flex border-b border-[#555]">
-                <button onclick="window.setActiveTab('habits')" id="tab-habits" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold">Habits</button>
-                <button onclick="window.setActiveTab('rewards')" id="tab-rewards" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold">Rewards</button>
-                <button onclick="window.setActiveTab('punishments')" id="tab-punishments" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold">Punishments</button>
-                <button onclick="window.setActiveTab('history')" id="tab-history" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold">History</button>
+            <div class="flex border-b border-[#555]" role="tablist" aria-label="Ledger sections">
+                <button onclick="window.setActiveTab('habits')" id="tab-habits" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold" role="tab" aria-controls="content-habits" aria-selected="true">Habits</button>
+                <button onclick="window.setActiveTab('rewards')" id="tab-rewards" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold" role="tab" aria-controls="content-rewards" aria-selected="false">Rewards</button>
+                <button onclick="window.setActiveTab('punishments')" id="tab-punishments" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold" role="tab" aria-controls="content-punishments" aria-selected="false">Punishments</button>
+                <button onclick="window.setActiveTab('history')" id="tab-history" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold" role="tab" aria-controls="content-history" aria-selected="false">History</button>
             </div>
 
             <!-- Habits Tab Content -->
-            <section id="content-habits" class="p-2 sm:p-6 space-y-6">
+            <section id="content-habits" class="p-2 sm:p-6 space-y-6" role="tabpanel" aria-labelledby="tab-habits">
                 <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
                     <h3 class="text-2xl">Habit Registry</h3>
-                    <button onclick="window.toggleHabitForm()" class="glowing-btn px-4 py-2 rounded text-sm w-full sm:w-auto"><i class="fas fa-plus mr-2"></i> Add New Habit</button>
+                    <button onclick="window.toggleHabitForm()" class="glowing-btn px-4 py-2 rounded text-sm w-full sm:w-auto" aria-controls="habit-form"><i class="fas fa-plus mr-2" aria-hidden="true"></i> Add New Habit</button>
                 </div>
-                <div id="habit-form" class="card p-4 space-y-4 hidden">
+                <div id="habit-form" class="card p-4 space-y-4 hidden" aria-hidden="true">
                     <h4 class="text-xl">Define a New Habit</h4>
-                    <input type="text" id="new-habit-desc" placeholder="Habit Description..." class="w-full">
+                    <input type="text" id="new-habit-desc" placeholder="Habit Description..." class="w-full" aria-label="Habit description">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <input type="number" id="new-habit-points" placeholder="Points (e.g., 10)" min="1" class="w-full">
-                        <input type="number" id="new-habit-times" placeholder="Times Per Week (e.g., 3)" min="1" max="7" class="w-full">
+                        <input type="number" id="new-habit-points" placeholder="Points (e.g., 10)" min="1" class="w-full" aria-label="Habit points">
+                        <input type="number" id="new-habit-times" placeholder="Times Per Week (e.g., 3)" min="1" max="7" class="w-full" aria-label="Times per week">
                     </div>
-                    <select id="new-habit-assignee" class="w-full">
+                    <select id="new-habit-assignee" class="w-full" aria-label="Assign habit to">
                         <option value="" disabled selected>Assign to which role?</option>
                         <option value="keeper">The Keeper</option>
                         <option value="nightingale">The Nightingale</option>
                     </select>
                     <div class="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-4">
-                         <button onclick="window.fillHabitForm('keeper')" class="glowing-btn px-3 py-1 rounded text-xs bg-red-800 border-red-500"><i class="fas fa-magic"></i> Keeper Example</button>
-                        <button onclick="window.fillHabitForm('nightingale')" class="glowing-btn px-3 py-1 rounded text-xs bg-purple-800 border-purple-500"><i class="fas fa-magic"></i> Nightingale Example</button>
-                        <button onclick="window.addNewHabit()" class="glowing-btn px-4 py-2 rounded bg-green-800 border-green-500">Save Habit</button>
+                         <button onclick="window.fillHabitForm('keeper')" class="glowing-btn px-3 py-1 rounded text-xs bg-red-800 border-red-500" aria-label="Keeper example"><i class="fas fa-magic" aria-hidden="true"></i> Keeper Example</button>
+                        <button onclick="window.fillHabitForm('nightingale')" class="glowing-btn px-3 py-1 rounded text-xs bg-purple-800 border-purple-500" aria-label="Nightingale example"><i class="fas fa-magic" aria-hidden="true"></i> Nightingale Example</button>
+                        <button onclick="window.addNewHabit()" class="glowing-btn px-4 py-2 rounded bg-green-800 border-green-500" aria-label="Save habit">Save Habit</button>
                     </div>
                 </div>
-                <div id="habits-list" class="space-y-3">
+                <div id="habits-list" class="space-y-3" role="list">
                     <p id="habits-loading">No habits defined yet.</p>
                 </div>
             </section>
 
             <!-- Rewards Tab Content -->
-            <section id="content-rewards" class="p-2 sm:p-6 space-y-6 hidden">
+            <section id="content-rewards" class="p-2 sm:p-6 space-y-6 hidden" role="tabpanel" aria-labelledby="tab-rewards" aria-hidden="true">
                 <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
                     <h3 class="text-2xl">Reward Catalog</h3>
-                    <button onclick="window.toggleRewardForm()" class="glowing-btn px-4 py-2 rounded text-sm w-full sm:w-auto"><i class="fas fa-plus mr-2"></i> Add New Reward</button>
+                    <button onclick="window.toggleRewardForm()" class="glowing-btn px-4 py-2 rounded text-sm w-full sm:w-auto" aria-controls="reward-form"><i class="fas fa-plus mr-2" aria-hidden="true"></i> Add New Reward</button>
                 </div>
-                <div id="reward-form" class="card p-4 space-y-4 hidden">
+                <div id="reward-form" class="card p-4 space-y-4 hidden" aria-hidden="true">
                     <h4 class="text-xl">Define a New Reward</h4>
-                    <input type="text" id="new-reward-title" placeholder="Reward Title..." class="w-full">
-                    <input type="number" id="new-reward-cost" placeholder="Point Cost (e.g., 50)" min="1" class="w-full">
-                    <textarea id="new-reward-desc" placeholder="Reward Description..." class="w-full h-24"></textarea>
+                    <input type="text" id="new-reward-title" placeholder="Reward Title..." class="w-full" aria-label="Reward title">
+                    <input type="number" id="new-reward-cost" placeholder="Point Cost (e.g., 50)" min="1" class="w-full" aria-label="Reward cost">
+                    <textarea id="new-reward-desc" placeholder="Reward Description..." class="w-full h-24" aria-label="Reward description"></textarea>
                     <div class="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-4">
-                        <button onclick="window.fillRewardForm()" class="glowing-btn px-3 py-1 rounded text-xs bg-purple-800 border-purple-500"><i class="fas fa-magic"></i> Generate Example</button>
-                        <button onclick="window.addNewReward()" class="glowing-btn px-4 py-2 rounded bg-green-800 border-green-500">Save Reward</button>
+                        <button onclick="window.fillRewardForm()" class="glowing-btn px-3 py-1 rounded text-xs bg-purple-800 border-purple-500" aria-label="Generate reward example"><i class="fas fa-magic" aria-hidden="true"></i> Generate Example</button>
+                        <button onclick="window.addNewReward()" class="glowing-btn px-4 py-2 rounded bg-green-800 border-green-500" aria-label="Save reward">Save Reward</button>
                     </div>
                 </div>
-                <div id="rewards-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div id="rewards-list" class="grid grid-cols-1 md:grid-cols-2 gap-4" role="list">
                     <p id="rewards-loading">No rewards defined yet.</p>
                 </div>
             </section>
 
             <!-- Punishments Tab Content -->
-            <section id="content-punishments" class="p-2 sm:p-6 space-y-6 hidden">
+            <section id="content-punishments" class="p-2 sm:p-6 space-y-6 hidden" role="tabpanel" aria-labelledby="tab-punishments" aria-hidden="true">
                 <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
                     <h3 class="text-2xl">Vows of Consequence</h3>
-                    <button onclick="window.togglePunishmentForm()" class="glowing-btn px-4 py-2 rounded text-sm w-full sm:w-auto"><i class="fas fa-plus mr-2"></i> Add New Punishment</button>
+                    <button onclick="window.togglePunishmentForm()" class="glowing-btn px-4 py-2 rounded text-sm w-full sm:w-auto" aria-controls="punishment-form"><i class="fas fa-plus mr-2" aria-hidden="true"></i> Add New Punishment</button>
                 </div>
-                <div id="punishment-form" class="card p-4 space-y-4 hidden">
+                <div id="punishment-form" class="card p-4 space-y-4 hidden" aria-hidden="true">
                     <h4 class="text-xl">Define a New Punishment</h4>
-                    <input type="text" id="new-punishment-title" placeholder="Punishment Title..." class="w-full">
-                    <textarea id="new-punishment-desc" placeholder="Punishment Description..." class="w-full h-24"></textarea>
+                    <input type="text" id="new-punishment-title" placeholder="Punishment Title..." class="w-full" aria-label="Punishment title">
+                    <textarea id="new-punishment-desc" placeholder="Punishment Description..." class="w-full h-24" aria-label="Punishment description"></textarea>
                     <div class="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-4">
-                        <button onclick="window.fillPunishmentForm()" class="glowing-btn px-3 py-1 rounded text-xs bg-red-800 border-red-500"><i class="fas fa-magic"></i> Generate Example</button>
-                        <button onclick="window.addNewPunishment()" class="glowing-btn px-4 py-2 rounded bg-green-800 border-green-500">Save Punishment</button>
+                        <button onclick="window.fillPunishmentForm()" class="glowing-btn px-3 py-1 rounded text-xs bg-red-800 border-red-500" aria-label="Generate punishment example"><i class="fas fa-magic" aria-hidden="true"></i> Generate Example</button>
+                        <button onclick="window.addNewPunishment()" class="glowing-btn px-4 py-2 rounded bg-green-800 border-green-500" aria-label="Save punishment">Save Punishment</button>
                     </div>
                 </div>
-                <div id="punishments-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div id="punishments-list" class="grid grid-cols-1 md:grid-cols-2 gap-4" role="list">
                     <p id="punishments-loading">No punishments defined yet.</p>
                 </div>
             </section>
 
             <!-- History Tab Content -->
-            <section id="content-history" class="p-2 sm:p-6 space-y-6 hidden">
+            <section id="content-history" class="p-2 sm:p-6 space-y-6 hidden" role="tabpanel" aria-labelledby="tab-history" aria-hidden="true">
                 <h3 class="text-2xl text-center">Ledger History</h3>
                 <div class="card p-6 h-96 overflow-y-auto">
-                    <ul id="history-list" class="space-y-3">
+                    <ul id="history-list" class="space-y-3" role="list">
                         <li id="history-loading" class="text-gray-500">Awaiting ledger entry...</li>
                     </ul>
                 </div>
@@ -399,17 +455,161 @@
         </div>
         
         <!-- Footer Info -->
-        <footer class="mt-12 pt-6 border-t border-[#3c3c45] text-center text-xs text-gray-500 space-y-2">
+        <footer class="mt-12 pt-6 border-t border-[#3c3c45] text-center text-xs text-gray-500 space-y-2" role="contentinfo">
             <p>App ID: <span id="current-app-id">...</span> | Ledger ID: <span id="current-ledger-id">...</span></p>
-            <p>User: <span id="current-user-email">...</span> (<button onclick="window.doSignOut()" class="underline hover:text-white">Sign Out</button>)</p>
+            <p>User: <span id="current-user-email">...</span> (<button onclick="window.doSignOut()" class="underline hover:text-white" aria-label="Sign out">Sign Out</button>)</p>
         </footer>
 
     </div>
 
+    <!-- Inline accessibility + focus-trap script -->
+    <script>
+    /**
+     * Lightweight focus-trap + ARIA helper.
+     * - Observes elements with [data-modal] and traps focus when they become visible (class 'hidden' removed).
+     * - Restores focus on close.
+     * - Closes on backdrop click and Escape.
+     * - Adds keyboard support for tablist (left/right arrows).
+     *
+     * This script is intentionally defensive: it watches for class changes so it works with existing open/close functions.
+     */
+    (function () {
+      const focusableSelectors = 'a[href], area[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      const modals = Array.from(document.querySelectorAll('[data-modal]'));
+      const state = new Map();
+
+      function getFocusable(container) {
+        return Array.from(container.querySelectorAll(focusableSelectors)).filter(el => el.offsetParent !== null);
+      }
+
+      function activateModal(modal) {
+        if (!modal || modal.dataset._active === 'true') return;
+        modal.dataset._active = 'true';
+        modal.setAttribute('aria-hidden', 'false');
+        modal.classList.remove('hidden');
+        const previouslyFocused = document.activeElement;
+        state.set(modal, { previouslyFocused });
+        const focusables = getFocusable(modal);
+        const toFocus = focusables.length ? focusables[0] : modal;
+        toFocus.focus();
+
+        modal._keydown = function (e) {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            closeModal(modal);
+            return;
+          }
+          if (e.key === 'Tab') {
+            const focusables = getFocusable(modal);
+            if (focusables.length === 0) {
+              e.preventDefault();
+              return;
+            }
+            const idx = focusables.indexOf(document.activeElement);
+            if (e.shiftKey) {
+              if (idx === 0 || document.activeElement === modal) {
+                focusables[focusables.length - 1].focus();
+                e.preventDefault();
+              }
+            } else {
+              if (idx === focusables.length - 1) {
+                focusables[0].focus();
+                e.preventDefault();
+              }
+            }
+          }
+        };
+        modal.addEventListener('keydown', modal._keydown);
+
+        modal._click = function (e) {
+          if (e.target === modal) {
+            closeModal(modal);
+          }
+        };
+        modal.addEventListener('mousedown', modal._click);
+      }
+
+      function closeModal(modal) {
+        if (!modal || modal.dataset._active !== 'true') return;
+        modal.dataset._active = 'false';
+        modal.setAttribute('aria-hidden', 'true');
+        modal.classList.add('hidden');
+        const s = state.get(modal) || {};
+        if (s.previouslyFocused && typeof s.previouslyFocused.focus === 'function') {
+          s.previouslyFocused.focus();
+        }
+        if (modal._keydown) modal.removeEventListener('keydown', modal._keydown);
+        if (modal._click) modal.removeEventListener('mousedown', modal._click);
+        state.delete(modal);
+      }
+
+      // Observe class changes so this works with existing open/close code that toggles 'hidden'
+      const observer = new MutationObserver(function (mutations) {
+        mutations.forEach(m => {
+          const target = m.target;
+          if (!target || !target.hasAttribute('data-modal')) return;
+          const isHidden = target.classList.contains('hidden');
+          if (!isHidden) activateModal(target);
+          else closeModal(target);
+        });
+      });
+
+      modals.forEach(modal => {
+        modal.setAttribute('aria-hidden', modal.classList.contains('hidden') ? 'true' : 'false');
+        modal.setAttribute('tabindex', '-1');
+        observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+        // wire up any internal close buttons
+        modal.querySelectorAll('[data-modal-close]').forEach(btn => {
+          btn.addEventListener('click', () => closeModal(modal));
+        });
+      });
+
+      // Expose helpers for manual control if needed
+      window.openModal = function (id) {
+        const m = document.getElementById(id);
+        if (m) activateModal(m);
+      };
+      window.closeModal = function (id) {
+        const m = document.getElementById(id);
+        if (m) closeModal(m);
+      };
+
+      // Accessible tab keyboard support (left/right)
+      document.addEventListener('keydown', function (e) {
+        if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+        const active = document.activeElement;
+        if (!active || active.getAttribute('role') !== 'tab') return;
+        const tablist = active.parentElement;
+        const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+        const idx = tabs.indexOf(active);
+        if (idx === -1) return;
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          const next = tabs[(idx + 1) % tabs.length];
+          next.focus();
+          next.click();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          const prev = tabs[(idx - 1 + tabs.length) % tabs.length];
+          prev.focus();
+          prev.click();
+        }
+      });
+
+      // Global Escape fallback: close topmost active modal
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        const activeModal = modals.find(m => m.dataset._active === 'true');
+        if (activeModal) closeModal(activeModal);
+      });
+
+    })();
+    </script>
+
     <!-- External JavaScript Imports -->
-    <script src="./examples.js"></script>
-    <script src="./firebase_config.js"></script>
-    <script type="module" src="./script.js"></script>
+    <script src="./examples.js" defer></script>
+    <script src="./firebase_config.js" defer></script>
+    <script type="module" src="./script.js" defer></script>
 
 </body>
 </html>
