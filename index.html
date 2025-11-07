@@ -130,22 +130,49 @@
         </div>
     </div>
     
-    <!-- New Session Start / Login Modal -->
-    <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-95 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-[#111111] p-8 rounded-2xl shadow-2xl border border-[#b05c6c] max-w-lg w-full text-center">
-            <h1 class="text-6xl font-cinzel text-[#b05c6c] mb-4 neon-title">Welcome to the Ledger</h1>
-            <h3 class="text-2xl font-cinzel text-gray-300 mb-8">Ready to record your progress?</h3>
+    <!-- AUTHENTICATION Modal (Replaces simple login modal) -->
+    <div id="auth-modal" class="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center p-4">
+        <div class="bg-[#1a1a1a] p-8 rounded-2xl shadow-2xl border border-[#b05c6c] max-w-md w-full text-center" onclick="event.stopPropagation()">
+            <h1 class="text-5xl font-cinzel text-[#b05c6c] mb-2 neon-title">The Nightingale Ledger</h1>
+            <h3 id="auth-header-title" class="text-xl font-cinzel text-gray-300 mb-6">Sign In to Continue</h3>
 
-            <div class="space-y-4 text-gray-400">
-                <p>You have been securely identified with the shared ledger. Once you begin your session, you will see your current score and the habits you need to complete.</p>
-                <p id="login-user-status" class="text-sm text-gray-500 pt-2">Loading user status...</p>
+            <!-- Authentication Forms Container -->
+            <div class="space-y-4">
+                
+                <!-- Google Sign-in Button -->
+                <button onclick="window.signInGoogle()" class="btn-primary w-full bg-gray-700 hover:bg-gray-600 border-gray-500 text-white py-3 text-lg">
+                    <i class="fab fa-google mr-3"></i> Sign In with Google
+                </button>
+
+                <div class="flex items-center">
+                    <div class="flex-grow border-t border-gray-700"></div>
+                    <span class="flex-shrink mx-4 text-gray-500 text-sm font-cinzel">OR</span>
+                    <div class="flex-grow border-t border-gray-700"></div>
+                </div>
+
+                <!-- Email/Password Form -->
+                <form id="email-auth-form" onsubmit="window.handleEmailAuth(event)">
+                    <div class="space-y-3">
+                        <input type="email" id="email-input" placeholder="Email" required class="w-full mt-1 p-3 bg-gray-900 border border-gray-700 rounded-md text-gray-200 focus:ring-nightingale focus:border-nightingale">
+                        <input type="password" id="password-input" placeholder="Password" required class="w-full mt-1 p-3 bg-gray-900 border border-gray-700 rounded-md text-gray-200 focus:ring-nightingale focus:border-nightingale">
+                    </div>
+                    
+                    <button type="submit" id="auth-submit-btn" class="btn-primary mt-6 text-lg bg-nightingale hover:bg-[#c06c7c] border-nightingale px-8 py-3 w-full">
+                        Sign In
+                    </button>
+                </form>
+
             </div>
+            
+            <!-- Error Message and Toggle -->
+            <p id="auth-error-message-modal" class="text-error text-sm mt-4"></p>
 
-            <button onclick="window.startSession()" class="btn-primary mt-8 text-lg bg-nightingale hover:bg-[#c06c7c] border-nightingale px-8 py-3 w-full sm:w-auto">
-                <i class="fas fa-book-open mr-3"></i> Begin Session
+            <button id="auth-toggle-btn" onclick="window.toggleAuthMode()" class="mt-6 text-sm text-gray-400 hover:text-white transition-colors">
+                New User? Create an Account
             </button>
         </div>
     </div>
+
 
     <!-- Main Application Content (Initially hidden) -->
     <div id="app-content" class="container mx-auto p-4 md:p-8 hidden">
@@ -207,10 +234,10 @@
                 <!-- 1. Administrative Actions (Logout/Reset) -->
                 <div class="border border-gray-700 p-4 rounded-md">
                     <h3 class="text-xl font-cinzel text-gray-300 mb-3">Administrative Actions</h3>
-                    <p class="text-sm text-gray-500 mb-4">Use these options with caution. They affect the shared ledger state. Your ID: <code id="current-user-id" class="text-gray-400">...</code></p>
+                    <p class="text-sm text-gray-500 mb-4">Your ID: <code id="current-user-id" class="text-gray-400">...</code></p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <button onclick="window.signOutUser()" class="btn-primary bg-red-800 hover:bg-red-700 text-white">
-                            <i class="fa-solid fa-door-open mr-2"></i>Sign Out / New Session
+                            <i class="fa-solid fa-door-open mr-2"></i>Sign Out
                         </button>
                         <button onclick="window.resetLedger()" class="btn-primary bg-red-500 hover:bg-red-400 text-white">
                             <i class="fa-solid fa-eraser mr-2"></i>Reset All Ledger Data
@@ -364,7 +391,7 @@
     </div>
 
     <!-- Initial Loading Screen (For initial connection and Unauthorized Access) -->
-    <div id="loading-screen" class="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+    <div id="loading-screen" class="min-h-screen flex flex-col items-center justify-center p-6 text-center hidden">
         <h1 class="text-4xl sm:text-6xl font-cinzel text-[#b05c6c] mb-6 neon-title">The Nightingale Ledger</h1>
         <div class="text-lg text-gray-400 max-w-xl mx-auto space-y-4">
             <p id="loading-message">Attempting to connect to the shared ledger...</p>

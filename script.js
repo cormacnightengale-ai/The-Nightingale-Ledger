@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getAuth, signInWithCustomToken, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -9,7 +9,8 @@ setLogLevel('Debug');
 // --- Global Variables (Canvas Environment) ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : (window.firebaseConfig || {});
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
+// NOTE: __initial_auth_token is no longer used for primary sign-in, as requested.
+// const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
 // --- Firebase/App State ---
 let app;
@@ -17,10 +18,12 @@ let db;
 let auth;
 let userId = null;
 let userSlot = null; // 'nightingale' or 'keeper'
+let authMode = 'signIn'; // 'signIn' or 'signUp'
+
 const GAME_STATE_DOC_PATH = `artifacts/${appId}/public/data/ledger_state/ledger_data`; 
 const GAME_STATE_DOC_ID = 'ledger_data';
 
-// --- Undo State (New) ---
+// --- Undo State ---
 let lastDeletedItem = null;
 let lastDeletedCollection = null;
 let lastDeletedIndex = null;
@@ -38,7 +41,7 @@ const defaultGameState = {
     keeperScore: 0,
     authorizedUsers: [], 
     profiles: {},        
-    habits: [], // Habits now include a 'repeat' property
+    habits: [], 
     rewards: [],
     punishments: [],
 };
@@ -48,18 +51,90 @@ let gameState = { ...defaultGameState };
 // --- Core Ledger Data Management (Authentication, Initialization, Listener) ---
 
 /**
- * Hides the main app content and displays an error message on the loading screen.
- * Used for unauthorized access.
+ * Utility to display errors on the authentication modal.
  */
-function lockApp(message) {
-    document.getElementById('app-content').classList.add('hidden');
-    document.getElementById('login-modal').classList.add('hidden'); // Hide modal too
-    document.getElementById('loading-screen').classList.remove('hidden');
-    document.getElementById('loading-message').innerHTML = `<p class="text-error font-bold text-3xl mb-4">ACCESS DENIED</p><p>${message}</p>`;
+function showAuthError(message) {
+    document.getElementById('auth-error-message-modal').textContent = message;
+    setTimeout(() => document.getElementById('auth-error-message-modal').textContent = '', 5000);
 }
 
 /**
- * Initializes Firebase, performs authentication, and sets up the data listener.
+ * Hides the main app content and displays the authentication modal.
+ */
+function showAuthModal() {
+    document.getElementById('loading-screen').classList.add('hidden');
+    document.getElementById('app-content').classList.add('hidden');
+    document.getElementById('auth-modal').classList.remove('hidden');
+    showAuthError(''); // Clear previous error
+}
+
+/**
+ * Toggles between sign-in and sign-up mode in the auth modal.
+ */
+window.toggleAuthMode = function() {
+    authMode = authMode === 'signIn' ? 'signUp' : 'signIn';
+    const title = document.getElementById('auth-header-title');
+    const submitBtn = document.getElementById('auth-submit-btn');
+    const toggleBtn = document.getElementById('auth-toggle-btn');
+    
+    if (authMode === 'signUp') {
+        title.textContent = 'Create a New Account';
+        submitBtn.textContent = 'Sign Up';
+        toggleBtn.textContent = 'Have an account? Sign In';
+    } else {
+        title.textContent = 'Sign In to Continue';
+        submitBtn.textContent = 'Sign In';
+        toggleBtn.textContent = 'New User? Create an Account';
+    }
+    showAuthError('');
+}
+
+/**
+ * Handles the submission of the Email/Password form based on current authMode.
+ */
+window.handleEmailAuth = async function(event) {
+    event.preventDefault();
+    const email = document.getElementById('email-input').value;
+    const password = document.getElementById('password-input').value;
+    
+    try {
+        if (authMode === 'signIn') {
+            await signInWithEmailAndPassword(auth, email, password);
+            // onAuthStateChanged will handle the rest
+        } else {
+            await createUserWithEmailAndPassword(auth, email, password);
+            // onAuthStateChanged will handle the rest
+        }
+    } catch (error) {
+        let message = "An unknown error occurred.";
+        if (error.code === 'auth/wrong-password') message = "Invalid password.";
+        else if (error.code === 'auth/user-not-found') message = "No user found with this email.";
+        else if (error.code === 'auth/email-already-in-use') message = "Email already in use. Try signing in.";
+        else if (error.code === 'auth/weak-password') message = "Password should be at least 6 characters.";
+        else if (error.code === 'auth/invalid-email') message = "Invalid email format.";
+        
+        showAuthError(`Error: ${message}`);
+        console.error("Auth Error:", error);
+    }
+}
+
+/**
+ * Handles Google Sign-In using a popup.
+ */
+window.signInGoogle = async function() {
+    const provider = new GoogleAuthProvider();
+    try {
+        await signInWithPopup(auth, provider);
+        // onAuthStateChanged will handle the rest
+    } catch (error) {
+        if (error.code === 'auth/popup-closed-by-user') return;
+        showAuthError("Google Sign-in failed. Try email/password or check console.");
+        console.error("Google Auth Error:", error);
+    }
+}
+
+/**
+ * Initializes Firebase, sets up auth listener, and determines initial UI state.
  */
 async function initializeAppAndAuth() {
     try {
@@ -67,72 +142,76 @@ async function initializeAppAndAuth() {
         db = getFirestore(app);
         auth = getAuth(app);
 
-        // 1. Initial Authentication
-        if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-        } else {
-            await signInAnonymously(auth);
-        }
-
-        // 2. Auth State Change Listener
+        // 1. Auth State Change Listener (Central control)
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 userId = user.uid;
-                document.getElementById('current-user-id').textContent = userId;
                 console.log(`User authenticated with ID: ${userId}.`);
-                setupLedgerListener();
+                document.getElementById('auth-modal').classList.add('hidden');
+                document.getElementById('app-content').classList.remove('hidden');
+                document.getElementById('current-user-id').textContent = userId;
+                setupLedgerListener(user);
             } else {
                 userId = null;
-                lockApp("Authentication failed. Please check your connection and try refreshing.");
+                showAuthModal(); // Show the login screen
             }
         });
 
     } catch (error) {
-        console.error("Firebase Initialization or Authentication Error:", error);
-        lockApp(`Connection Error: ${error.message}`);
+        console.error("Firebase Initialization Error:", error);
+        document.getElementById('loading-message').textContent = `Initialization Error: ${error.message}`;
     }
 }
 
 /**
  * Sets up a real-time listener for the shared ledger data and manages the two-user lock.
  */
-function setupLedgerListener() {
+function setupLedgerListener(user) {
     const docRef = doc(db, GAME_STATE_DOC_PATH);
 
     onSnapshot(docRef, async (docSnapshot) => {
+        
+        // Use the authenticated user's ID
+        const currentUserId = user.uid;
+
         if (docSnapshot.exists()) {
             const remoteState = docSnapshot.data();
             gameState = { ...defaultGameState, ...remoteState };
             
-            // --- Two-User Lock Logic (Same as before) ---
             let users = gameState.authorizedUsers || [];
             let profiles = gameState.profiles || {};
             
-            const isAuthorized = users.includes(userId);
+            const isAuthorized = users.includes(currentUserId);
             let requiresUpdate = false;
             
             if (!isAuthorized) {
                 if (users.length < 2) {
-                    users = [...users, userId];
+                    // Assign new authenticated user to an empty slot
+                    users = [...users, currentUserId];
                     const slot = users.length === 1 ? 'nightingale' : 'keeper';
-                    const name = slot.charAt(0).toUpperCase() + slot.slice(1);
-                    const newProfile = { ...defaultProfile, name: name, slot: slot };
-                    profiles[userId] = newProfile;
+                    const name = user.displayName || user.email || slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const newProfile = { ...defaultProfile, name: name.split('@')[0], slot: slot };
+                    profiles[currentUserId] = newProfile;
                     
                     userSlot = slot;
                     requiresUpdate = true;
                 } else {
-                    lockApp(`The ledger is currently locked to two authorized users. Your User ID (${userId}) is not permitted.`);
+                    // This is the error the user was seeing. Now it happens only to the 3rd authenticated user.
+                    // We sign out the user to force them back to the login screen without persistent data.
+                    showAuthError(`The ledger is currently locked to two authorized users. Your User ID is not permitted.`);
+                    await signOut(auth); 
                     return; 
                 }
             } else {
-                if (!profiles[userId]) {
-                    userSlot = users.length === 1 ? 'nightingale' : (users[0] === userId ? 'nightingale' : 'keeper');
-                    const name = userSlot.charAt(0).toUpperCase() + userSlot.slice(1);
-                    profiles[userId] = { ...defaultProfile, name: name, slot: userSlot };
+                // User is authorized, ensure profile data exists and slot is set
+                if (!profiles[currentUserId]) {
+                    // This should not happen if the initial sign-up logic works, but provides a fallback
+                    userSlot = users.length === 1 ? 'nightingale' : (users[0] === currentUserId ? 'nightingale' : 'keeper');
+                    const name = user.displayName || user.email || userSlot.charAt(0).toUpperCase() + userSlot.slice(1);
+                    profiles[currentUserId] = { ...defaultProfile, name: name.split('@')[0], slot: userSlot };
                     requiresUpdate = true;
                 } else {
-                    userSlot = profiles[userId].slot;
+                    userSlot = profiles[currentUserId].slot;
                 }
             }
 
@@ -141,19 +220,16 @@ function setupLedgerListener() {
             }
 
             renderLedger();
-            
-            document.getElementById('loading-screen').classList.add('hidden');
-            
-            // NEW: Show the login modal after data is loaded and rendered
-            window.showLoginModal();
+            // Show main app content (handled by onAuthStateChanged)
 
         } else {
             // Document does not exist, create the initial document with current user as Nightingale
             const initialSlot = 'nightingale';
-            const initialProfile = { ...defaultProfile, name: 'Nightingale', slot: initialSlot };
+            const name = user.displayName || user.email || 'Nightingale';
+            const initialProfile = { ...defaultProfile, name: name.split('@')[0], slot: initialSlot };
             
-            gameState.authorizedUsers = [userId];
-            gameState.profiles[userId] = initialProfile;
+            gameState.authorizedUsers = [currentUserId];
+            gameState.profiles[currentUserId] = initialProfile;
             userSlot = initialSlot;
             
             await setDoc(docRef, gameState)
@@ -163,30 +239,10 @@ function setupLedgerListener() {
     }, (error) => {
         console.error("Firestore Listener Error:", error);
         document.getElementById('auth-error-message').textContent = `Data Error: Could not load ledger. ${error.message}`;
+        showAuthModal();
     });
 }
 
-/**
- * Transitions from the loading screen to the login modal, displaying user context.
- */
-window.showLoginModal = function() {
-    const currentUserProfile = gameState.profiles[userId];
-    const slotText = currentUserProfile.slot.charAt(0).toUpperCase() + currentUserProfile.slot.slice(1);
-    
-    document.getElementById('login-user-status').textContent = 
-        `You are currently logged in as ${currentUserProfile.name} (${slotText}).`;
-
-    document.getElementById('loading-screen').classList.add('hidden');
-    document.getElementById('login-modal').classList.remove('hidden');
-}
-
-/**
- * Initiates the main application view after the user clicks the 'Begin Session' button.
- */
-window.startSession = function() {
-    document.getElementById('login-modal').classList.add('hidden');
-    document.getElementById('app-content').classList.remove('hidden');
-}
 
 /**
  * Updates the entire gameState document in Firestore.
@@ -208,8 +264,7 @@ async function updateGameState(updates) {
     }
 }
 
-// --- Rendering Functions ---
-
+// --- Rendering Functions (Simplified for brevity) ---
 function renderLedger() {
     
     // Find which user is assigned to which slot based on the profile data
@@ -415,7 +470,6 @@ window.openEditProfile = function(slot) {
     
     // Only allow editing if the current user ID matches the target slot's ID
     if (userId !== targetUserId) {
-        // This check is mainly for visual feedback, the form only submits for the current user's slot
         document.getElementById('auth-error-message').textContent = `ERROR: You can only edit your own profile, not the ${slot.charAt(0).toUpperCase() + slot.slice(1)} profile.`;
         setTimeout(() => document.getElementById('auth-error-message').textContent = '', 3000);
         return;
@@ -477,7 +531,7 @@ window.saveProfileChanges = async function(event) {
     window.toggleEditProfileModal(false);
 }
 
-// --- Utility & Administrative Functions (Unchanged) ---
+// --- Utility & Administrative Functions ---
 
 window.toggleSettingsPanel = function(show) {
     const panel = document.getElementById('settings-panel');
@@ -503,6 +557,7 @@ window.resetLedger = async function() {
 
             const resetState = { 
                 ...defaultGameState, 
+                // Keep the authorized users and re-initialize their profiles
                 authorizedUsers: gameState.authorizedUsers, 
                 profiles: gameState.authorizedUsers.reduce((acc, uid) => {
                     const slot = gameState.profiles[uid]?.slot || (uid === gameState.authorizedUsers[0] ? 'nightingale' : 'keeper');
@@ -529,22 +584,16 @@ window.resetLedger = async function() {
 window.signOutUser = async function() {
     try {
         await signOut(auth);
+        // The onAuthStateChanged listener will catch this and show the auth modal
         document.getElementById('app-content').classList.add('hidden');
-        document.getElementById('login-modal').classList.add('hidden'); // Hide modal too
-        document.getElementById('loading-screen').classList.remove('hidden');
-        document.getElementById('loading-message').textContent = "Successfully signed out. Reloading session...";
-
-        setTimeout(() => {
-            window.location.reload(); 
-        }, 1000);
-
+        document.getElementById('auth-error-message').textContent = "Signed out successfully.";
     } catch (error) {
         console.error("Sign Out Error:", error);
         document.getElementById('auth-error-message').textContent = `Sign Out Error: ${error.message}`;
     }
 }
 
-// --- Action Functions (Unchanged score logic) ---
+// --- Action Functions (Unchanged) ---
 
 window.toggleHabitForm = function(show) { document.getElementById('habit-form').classList.toggle('hidden', !show); }
 window.toggleRewardForm = function(show) { document.getElementById('reward-form').classList.toggle('hidden', !show); }
@@ -597,7 +646,7 @@ window.claimReward = async function(index, cost) {
     showToast(`Reward claimed! -${cost} points.`, false);
 }
 
-// --- Creation Functions (Updated for Habit Repeat) ---
+// --- Creation/Deletion/Example Functions (Omitted for brevity, assumed to be correctly structured) ---
 
 window.saveNewHabit = async function(event) {
     event.preventDefault();
@@ -605,7 +654,7 @@ window.saveNewHabit = async function(event) {
         description: document.getElementById('new-habit-desc').value.trim(),
         points: parseInt(document.getElementById('new-habit-points').value, 10),
         type: document.getElementById('new-habit-type').value,
-        repeat: document.getElementById('new-habit-repeat').value, // NEW REPEAT FIELD
+        repeat: document.getElementById('new-habit-repeat').value, 
         id: crypto.randomUUID(),
     };
 
@@ -650,35 +699,23 @@ window.saveNewPunishment = async function(event) {
     }
 }
 
-// --- Deletion Functions (Updated for Toast/Undo) ---
-
-/**
- * Prepares the undo data and executes the deletion.
- * @param {string} collectionName - 'habits', 'rewards', or 'punishments'
- * @param {string} index - Index of the item to delete
- */
 window.prepareDelete = async function(collectionName, index) {
     const list = [...gameState[collectionName]];
     const i = parseInt(index, 10);
     
     if (i >= list.length || i < 0) return;
 
-    // 1. Save the item and context for potential undo
     lastDeletedItem = list.splice(i, 1)[0];
     lastDeletedCollection = collectionName;
     lastDeletedIndex = i;
 
-    // 2. Perform the deletion update in Firestore
     const updates = { [collectionName]: list };
     await updateGameState(updates);
 
-    // 3. Show Toast Notification
     const name = lastDeletedItem.title || lastDeletedItem.description;
     showToast(`"${name}" deleted.`, true);
 }
 
-
-// --- Example Filler Functions (Unchanged, just moved) ---
 
 window.fillHabitForm = function() {
     if (!window.EXAMPLE_DATABASE) { 
@@ -691,7 +728,7 @@ window.fillHabitForm = function() {
     document.getElementById('new-habit-desc').value = example.description;
     document.getElementById('new-habit-points').value = example.points;
     document.getElementById('new-habit-type').value = example.type;
-    document.getElementById('new-habit-repeat').value = 'daily'; // Default to daily for examples
+    document.getElementById('new-habit-repeat').value = 'daily'; 
     if (document.getElementById('habit-form').classList.contains('hidden')) { window.toggleHabitForm(true); }
 }
 
