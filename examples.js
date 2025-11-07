@@ -2,9 +2,10 @@
  * EXAMPLE_DATABASE
  * This object holds a large list of pre-defined suggestions for habits, rewards,
  * and punishments to be used by the "Generate Example" buttons in the Nightingale Ledger.
- * This is loaded globally before script.js.
+ * * CRITICAL FIX: Changed 'const' to 'window.EXAMPLE_DATABASE' to explicitly
+ * attach it to the global scope, making it accessible to the 'script.js' module.
  */
-const EXAMPLE_DATABASE = {
+window.EXAMPLE_DATABASE = {
     // --- HABITS (Description, Points, Type: 'keeper' or 'nightingale') ---
     habits: [
         // Daily Focus & Productivity (High Points)

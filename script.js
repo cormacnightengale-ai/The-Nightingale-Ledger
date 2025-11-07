@@ -16,17 +16,66 @@ let app;
 let db;
 let auth;
 let userId = null;
-// Path for public/shared data: artifacts/{appId}/public/data/ledger_state/{docId}
 const GAME_STATE_DOC_PATH = `artifacts/${appId}/public/data/ledger_state/ledger_data`; 
 const GAME_STATE_DOC_ID = 'ledger_data';
 
+// --- Theme Color Presets ---
+const PRESETS = {
+    Nightingale: {
+        colorBgStart: '#000000',
+        colorBgEnd: '#1a1a1c',
+        colorCardBg: '#1a1a1c',
+        colorTextBase: '#e0e0e0',
+        colorTextMuted: '#9ca3af',
+        colorAccentPrimary: '#b05c6c',
+        colorAccentSecondary: '#7f00ff',
+        colorAccentSecondaryHover: '#4d0099',
+        colorScore: '#ff9900',
+        colorBorderLight: '#555555',
+        colorBorderDark: '#3c3c45',
+        colorInputBg: '#0d0d0f',
+        colorShadowPrimary: 'rgba(176, 92, 108, 0.2)',
+        colorShadowSecondary: 'rgba(127, 0, 255, 0.1)',
+    },
+    Daybreak: {
+        colorBgStart: '#f3f4f6',
+        colorBgEnd: '#e5e7eb',
+        colorCardBg: '#ffffff',
+        colorTextBase: '#1f2937',
+        colorTextMuted: '#6b7280',
+        colorAccentPrimary: '#4f46e5',
+        colorAccentSecondary: '#4f46e5',
+        colorAccentSecondaryHover: '#4338ca',
+        colorScore: '#3730a3',
+        colorBorderLight: '#e5e7eb',
+        colorBorderDark: '#d1d5db',
+        colorInputBg: '#f9fafb',
+        colorShadowPrimary: 'rgba(0, 0, 0, 0.05)',
+        colorShadowSecondary: 'rgba(0, 0, 0, 0.03)',
+    },
+    Grove: {
+        colorBgStart: '#181c18',
+        colorBgEnd: '#202620',
+        colorCardBg: '#202620',
+        colorTextBase: '#d4d4d8',
+        colorTextMuted: '#a1a1aa',
+        colorAccentPrimary: '#65a30d',
+        colorAccentSecondary: '#84cc16',
+        colorAccentSecondaryHover: '#65a30d',
+        colorScore: '#a3e635',
+        colorBorderLight: '#3f6212',
+        colorBorderDark: '#365314',
+        colorInputBg: '#1a201a',
+        colorShadowPrimary: 'rgba(101, 163, 13, 0.2)',
+        colorShadowSecondary: 'rgba(101, 163, 13, 0.1)',
+    }
+};
+
 // --- Default Game State ---
-// This defines the complete structure. 
-// When loading from Firestore, this default structure is merged with the fetched data
-// to ensure new properties (like 'settings' or 'color') are present.
 const DEFAULT_GAME_STATE = {
     settings: {
-        theme: 'theme-goth' // Default theme
+        theme: 'Nightingale', // Name of the preset
+        colors: PRESETS.Nightingale // The full color object
     },
     players: {
         keeper: { 
@@ -50,12 +99,12 @@ const DEFAULT_GAME_STATE = {
     history: []
 };
 
-let gameState = JSON.parse(JSON.stringify(DEFAULT_GAME_STATE)); // Start with a deep copy
+let gameState = JSON.parse(JSON.stringify(DEFAULT_GAME_STATE));
 
 // --- Utility Functions ---
 
 /**
- * Custom modal implementation for alerts and notices (replaces window.alert/confirm)
+ * Custom modal implementation for alerts and notices
  */
 function showModal(title, message, isPrompt = false, defaultValue = '') {
     return new Promise((resolve) => {
@@ -91,7 +140,7 @@ function showModal(title, message, isPrompt = false, defaultValue = '') {
             modal.classList.remove('flex');
             confirmBtn.removeEventListener('click', handleConfirm);
             cancelBtn.removeEventListener('click', handleCancel);
-            resolve(null); // Return null for prompt cancellation
+            resolve(null);
         };
 
         confirmBtn.addEventListener('click', handleConfirm);
@@ -115,28 +164,23 @@ async function initFirebase() {
         db = getFirestore(app);
         auth = getAuth(app);
         
-        // Initial authentication logic
         if (initialAuthToken) {
             await signInWithCustomToken(auth, initialAuthToken);
         } else {
-            // Fallback for standard web deployment without a custom token
             await signInAnonymously(auth);
         }
 
-        // Wait for auth state to be resolved
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 userId = user.uid;
                 document.getElementById('current-user-id').textContent = userId;
                 document.getElementById('current-app-id').textContent = appId;
                 
-                // Once authenticated, start listening to the shared ledger state
                 document.getElementById('loading-screen').classList.add('hidden');
                 document.getElementById('main-content').classList.remove('hidden');
                 listenToGameState();
                 
             } else {
-                // If auth fails for any reason
                 console.error("Authentication failed or user logged out.");
                 document.getElementById('auth-error-message').textContent = 'Authentication failed. Please check environment configuration.';
             }
@@ -155,22 +199,32 @@ function listenToGameState() {
     onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
             const fetchedState = docSnap.data();
-            // Merge defaults with fetched state to ensure new properties are added
-            // and not lost on first load after an update.
-            // This is a deep merge, simplified for one level.
+            // Deep merge defaults with fetched state
             gameState = {
                 ...DEFAULT_GAME_STATE,
                 ...fetchedState,
-                settings: { ...DEFAULT_GAME_STATE.settings, ...fetchedState.settings },
+                settings: {
+                    ...DEFAULT_GAME_STATE.settings,
+                    ...(fetchedState.settings || {}),
+                    colors: {
+                        ...DEFAULT_GAME_STATE.settings.colors,
+                        ...(fetchedState.settings?.colors || {})
+                    }
+                },
                 players: {
                     keeper: { ...DEFAULT_GAME_STATE.players.keeper, ...fetchedState.players?.keeper },
                     nightingale: { ...DEFAULT_GAME_STATE.players.nightingale, ...fetchedState.players?.nightingale }
                 },
                 scores: { ...DEFAULT_GAME_STATE.scores, ...fetchedState.scores },
+                // Ensure arrays are not overwritten as objects if empty
+                habits: fetchedState.habits || [],
+                rewards: fetchedState.rewards || [],
+                punishments: fetchedState.punishments || [],
+                history: fetchedState.history || [],
             };
         } else {
             // Document doesn't exist, create it with the full default state
-            gameState = JSON.parse(JSON.stringify(DEFAULT_GAME_STATE)); // Use a fresh copy
+            gameState = JSON.parse(JSON.stringify(DEFAULT_GAME_STATE));
             updateGameState(gameState, "Initial Ledger Created");
         }
         renderState(); // Render after state is finalized
@@ -184,51 +238,122 @@ function listenToGameState() {
 async function updateGameState(newState, historyMessage) {
     if (!db) return;
     
-    // Add history entry
     if (historyMessage) {
-        // Ensure history array exists
-        if (!newState.history) {
-            newState.history = [];
-        }
+        if (!newState.history) newState.history = [];
         newState.history.unshift({ 
             timestamp: new Date().toISOString(), 
             message: historyMessage 
         });
-        // Keep history manageable (e.g., last 25 entries)
         newState.history = newState.history.slice(0, 25); 
     }
 
-    // Update global state immediately
     gameState = newState; 
 
     try {
-        // Use setDoc with merge: false to overwrite, ensuring deleted items are removed.
-        // Since we are managing the full state object 'gameState', this is safe.
         await setDoc(doc(db, GAME_STATE_DOC_PATH), newState, { merge: false });
     } catch (e) {
         console.error("Error writing document: ", e);
         window.alert(`Failed to save state: ${e.message}`);
     }
-    // Re-render locally immediately for responsiveness.
-    // Firestore's onSnapshot will also trigger this, but this feels faster.
-    renderState();
+    // No need to call renderState() here, onSnapshot will do it.
 }
 
 
 // --- Theme and Settings ---
 
-function applyTheme(themeName) {
-    document.body.className = `p-4 sm:p-8 ${themeName}`;
-    // Ensure the theme dropdown reflects the current theme
-    const themeSelect = document.getElementById('theme-select');
-    if (themeSelect) {
-        themeSelect.value = themeName;
+/**
+ * Applies the given color object to the root element's CSS variables.
+ * @param {object} colors - The color object (e.g., PRESETS.Nightingale)
+ */
+function applyTheme(colors) {
+    const root = document.documentElement;
+    if (!colors) colors = PRESETS.Nightingale; // Safety fallback
+
+    // Map the keys from the colors object to CSS variables
+    const colorMap = {
+        colorBgStart: '--color-bg-start',
+        colorBgEnd: '--color-bg-end',
+        colorCardBg: '--color-card-bg',
+        colorTextBase: '--color-text-base',
+        colorTextMuted: '--color-text-muted',
+        colorAccentPrimary: '--color-accent-primary',
+        colorAccentSecondary: '--color-accent-secondary',
+        colorAccentSecondaryHover: '--color-accent-secondary-hover',
+        colorScore: '--color-score',
+        colorBorderLight: '--color-border-light',
+        colorBorderDark: '--color-border-dark',
+        colorInputBg: '--color-input-bg',
+        colorShadowPrimary: '--color-shadow-primary',
+        colorShadowSecondary: '--color-shadow-secondary',
+    };
+
+    for (const [key, cssVar] of Object.entries(colorMap)) {
+        if (colors[key]) {
+            root.style.setProperty(cssVar, colors[key]);
+        }
     }
+    
+    // Set data-theme for theme-specific animations (like neon)
+    root.setAttribute('data-theme', gameState.settings.theme);
 }
 
+/**
+ * Reads all color pickers from the settings modal.
+ * @returns {object} A color object.
+ */
+function getColorsFromPickers() {
+    return {
+        colorBgStart: document.getElementById('color-bg-start').value,
+        colorBgEnd: document.getElementById('color-bg-end').value,
+        colorCardBg: document.getElementById('color-card-bg').value,
+        colorTextBase: document.getElementById('color-text-base').value,
+        colorAccentPrimary: document.getElementById('color-accent-primary').value,
+        colorAccentSecondary: document.getElementById('color-accent-secondary').value,
+        colorScore: document.getElementById('color-score').value,
+        // Non-picker values must be derived or saved
+        // For simplicity, we'll pull them from the *current* preset
+        // A "Custom" preset should probably save all values
+        ...getNonPickerColors(document.getElementById('theme-preset-select').value)
+    };
+}
+
+/**
+ * Populates all color pickers from a given color object.
+ * @param {object} colors - The color object.
+ */
+function setColorsInPickers(colors) {
+    document.getElementById('color-bg-start').value = colors.colorBgStart;
+    document.getElementById('color-bg-end').value = colors.colorBgEnd;
+    document.getElementById('color-card-bg').value = colors.colorCardBg;
+    document.getElementById('color-text-base').value = colors.colorTextBase;
+    document.getElementById('color-accent-primary').value = colors.colorAccentPrimary;
+    document.getElementById('color-accent-secondary').value = colors.colorAccentSecondary;
+    document.getElementById('color-score').value = colors.colorScore;
+}
+
+/**
+ * A helper to get the non-editable colors (like hover, shadow) from a preset.
+ */
+function getNonPickerColors(presetName) {
+    const preset = PRESETS[presetName] || PRESETS.Nightingale;
+    return {
+        colorTextMuted: preset.colorTextMuted,
+        colorAccentSecondaryHover: preset.colorAccentSecondaryHover,
+        colorBorderLight: preset.colorBorderLight,
+        colorBorderDark: preset.colorBorderDark,
+        colorInputBg: preset.colorInputBg,
+        colorShadowPrimary: preset.colorShadowPrimary,
+        colorShadowSecondary: preset.colorShadowSecondary,
+    };
+}
+
+
 window.openSettingsModal = function() {
-    // Set the dropdown to the current theme *before* showing the modal
-    document.getElementById('theme-select').value = gameState.settings.theme;
+    // Populate modal *before* showing
+    const settings = gameState.settings;
+    document.getElementById('theme-preset-select').value = settings.theme;
+    setColorsInPickers(settings.colors);
+
     document.getElementById('settings-modal').classList.remove('hidden');
     document.getElementById('settings-modal').classList.add('flex');
 }
@@ -236,19 +361,57 @@ window.openSettingsModal = function() {
 window.closeSettingsModal = function() {
     document.getElementById('settings-modal').classList.add('hidden');
     document.getElementById('settings-modal').classList.remove('flex');
+    // Re-apply the saved theme in case user Canceled
+    applyTheme(gameState.settings.colors);
 }
 
 window.saveSettings = function() {
-    const newTheme = document.getElementById('theme-select').value;
     const newState = JSON.parse(JSON.stringify(gameState));
+    const newThemeName = document.getElementById('theme-preset-select').value;
     
-    newState.settings.theme = newTheme;
+    // Get all colors from the pickers
+    const pickerColors = getColorsFromPickers();
+    
+    // Get the non-picker colors from the *selected preset*
+    // This is important if they chose "Grove" but tweaked the main color
+    // Or, if "Custom", we should probably use the "Nightingale" non-pickers as a base
+    const basePreset = PRESETS[newThemeName] || PRESETS.Nightingale;
+    
+    newState.settings.theme = newThemeName;
+    newState.settings.colors = {
+        ...basePreset, // Start with all colors from the preset
+        ...pickerColors // Overwrite with the picker values
+    };
 
     // Apply theme immediately for local user
-    applyTheme(newTheme); 
+    applyTheme(newState.settings.colors); 
     
-    updateGameState(newState, `Theme changed to ${newTheme.split('-')[1]}`);
+    updateGameState(newState, `Theme settings updated.`);
     window.closeSettingsModal();
+}
+
+/**
+ * Called when the preset dropdown changes.
+ */
+window.handlePresetChange = function() {
+    const presetName = document.getElementById('theme-preset-select').value;
+    if (presetName !== 'Custom') {
+        const presetColors = PRESETS[presetName];
+        setColorsInPickers(presetColors);
+        // Temporarily apply the theme for preview
+        applyTheme(presetColors);
+    }
+}
+
+/**
+ * Called when a color picker value changes.
+ */
+window.setPresetToCustom = function() {
+    document.getElementById('theme-preset-select').value = 'Custom';
+    // Live-preview the custom color change
+    const pickerColors = getColorsFromPickers();
+    const basePreset = PRESETS[gameState.settings.theme] || PRESETS.Nightingale;
+    applyTheme({ ...basePreset, ...pickerColors });
 }
 
 
@@ -256,10 +419,10 @@ window.saveSettings = function() {
 
 function renderState() {
     // 1. Apply Theme
-    if (gameState.settings && gameState.settings.theme) {
-        applyTheme(gameState.settings.theme);
+    if (gameState.settings && gameState.settings.colors) {
+        applyTheme(gameState.settings.colors);
     } else {
-        applyTheme('theme-goth'); // Fallback
+        applyTheme(PRESETS.Nightingale); // Fallback
     }
 
     // 2. Render Scores and Names
@@ -275,9 +438,8 @@ function renderState() {
         if (player) {
             nameEl.textContent = player.name;
             titleEl.textContent = `The ${player.title}`;
-            // Apply custom color
             titleEl.style.color = player.color;
-            cardEl.style.borderColor = player.color; // Apply to card border
+            cardEl.style.borderColor = player.color; 
         }
         if (scoreEl) {
             scoreEl.textContent = score;
@@ -296,20 +458,20 @@ function renderState() {
             const color = player ? player.color : '#9ca3af';
             
             const habitItem = document.createElement('div');
-            habitItem.className = 'card p-4 flex items-center justify-between border-b border-[#3c3c45] transition-all hover:bg-[#2a2a2c]';
+            habitItem.className = 'card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between sm:space-x-4 space-y-3 sm:space-y-0';
             habitItem.innerHTML = `
-                <div>
+                <div class="flex-grow">
                     <p class="text-lg font-semibold">${habit.description}</p>
-                    <p class="text-sm text-gray-400">
+                    <p class="text-sm" style="color: var(--color-text-muted);">
                         <span style="color: ${color}; font-weight: bold;">(${habit.assignee.charAt(0).toUpperCase() + habit.assignee.slice(1)})</span>
                         &mdash; ${name} | ${habit.points} Points | ${habit.timesPerWeek}x Week
                     </p>
                 </div>
-                <div class="flex space-x-2">
-                    <button onclick="window.completeHabit(${index})" class="glowing-btn px-3 py-1 rounded text-xs bg-green-700 border-green-500">
+                <div class="flex space-x-2 flex-shrink-0 w-full sm:w-auto">
+                    <button onclick="window.completeHabit(${index})" class="glowing-btn px-3 py-1 rounded text-xs bg-green-700 border-green-500 flex-1">
                         <i class="fas fa-check"></i>
                     </button>
-                    <button onclick="window.deleteItem('habit', ${index})" class="glowing-btn px-3 py-1 rounded text-xs bg-red-700 border-red-500">
+                    <button onclick="window.deleteItem('habit', ${index})" class="glowing-btn px-3 py-1 rounded text-xs bg-red-700 border-red-500 flex-1">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -326,13 +488,14 @@ function renderState() {
     } else {
         gameState.rewards.forEach((reward, index) => {
             const rewardItem = document.createElement('div');
-            rewardItem.className = 'card p-4 space-y-2 border-l-4 border-purple-500'; // Kept purple for "reward" theme
+            rewardItem.className = 'card p-4 space-y-2 border-l-4';
+            rewardItem.style.borderLeftColor = 'var(--color-accent-secondary)'; // Use theme color
             rewardItem.innerHTML = `
                 <div class="flex justify-between items-center">
-                    <p class="text-xl text-purple-300 font-semibold">${reward.title}</p>
-                    <span class="text-lg text-yellow-500 font-cinzel">${reward.cost} Pts</span>
+                    <p class="text-xl font-semibold">${reward.title}</p>
+                    <span class="text-lg font-cinzel" style="color: var(--color-score);">${reward.cost} Pts</span>
                 </div>
-                <p class="text-sm text-gray-400">${reward.description}</p>
+                <p class="text-sm" style="color: var(--color-text-muted);">${reward.description}</p>
                 <div class="flex space-x-2 pt-2">
                     <button onclick="window.claimReward(${index})" class="glowing-btn px-3 py-1 rounded text-xs bg-green-700 border-green-500">
                         <i class="fas fa-gift"></i> Claim
@@ -354,12 +517,13 @@ function renderState() {
     } else {
         gameState.punishments.forEach((punishment, index) => {
             const punishmentItem = document.createElement('div');
-            punishmentItem.className = 'card p-4 space-y-2 border-l-4 border-red-500'; // Kept red for "punishment" theme
+            punishmentItem.className = 'card p-4 space-y-2 border-l-4';
+            punishmentItem.style.borderLeftColor = 'var(--color-accent-primary)'; // Use theme color
             punishmentItem.innerHTML = `
                 <div class="flex justify-between items-center">
-                    <p class="text-xl text-red-300 font-semibold">${punishment.title}</p>
+                    <p class="text-xl font-semibold">${punishment.title}</p>
                 </div>
-                <p class="text-sm text-gray-400">${punishment.description}</p>
+                <p class="text-sm" style="color: var(--color-text-muted);">${punishment.description}</p>
                 <div class="flex space-x-2 pt-2">
                     <button onclick="window.deleteItem('punishment', ${index})" class="glowing-btn px-3 py-1 rounded text-xs bg-red-700 border-red-500">
                         <i class="fas fa-trash"></i> Delete
@@ -379,7 +543,8 @@ function renderState() {
         gameState.history.forEach(item => {
             const date = new Date(item.timestamp).toLocaleTimeString();
             const historyItem = document.createElement('li');
-            historyItem.className = 'text-sm border-b border-[#3c3c45] pb-2'; // Color will be inherited from theme
+            historyItem.className = 'text-sm border-b pb-2'; // Color will be inherited
+            historyItem.style.borderColor = 'var(--color-border-dark)';
             historyItem.innerHTML = `[${date}] ${item.message}`;
             historyList.appendChild(historyItem);
         });
@@ -394,14 +559,12 @@ function renderState() {
 window.openEditProfileModal = function(playerKey) {
     const player = gameState.players[playerKey];
     
-    // Populate the modal
     document.getElementById('profile-modal-title').textContent = `Edit ${player.title}'s Profile`;
     document.getElementById('profile-modal-player-key').value = playerKey;
     document.getElementById('profile-modal-name').value = player.name;
     document.getElementById('profile-modal-title').value = player.title;
     document.getElementById('profile-modal-color').value = player.color;
 
-    // Show the modal
     document.getElementById('profile-modal').classList.remove('hidden');
     document.getElementById('profile-modal').classList.add('flex');
 }
@@ -424,7 +587,6 @@ window.savePlayerProfile = function() {
 
     const newState = JSON.parse(JSON.stringify(gameState));
     
-    // Capitalize the new title for display consistency
     const formattedTitle = newTitle.charAt(0).toUpperCase() + newTitle.slice(1);
     
     newState.players[playerKey] = {
@@ -460,7 +622,6 @@ window.addNewHabit = function() {
         assignee: assignee,
     });
 
-    // Clear form
     document.getElementById('new-habit-desc').value = '';
     document.getElementById('new-habit-points').value = '';
     document.getElementById('new-habit-times').value = '';
@@ -489,7 +650,6 @@ window.addNewReward = function() {
         description: desc,
     });
 
-    // Clear form
     document.getElementById('new-reward-title').value = '';
     document.getElementById('new-reward-cost').value = '';
     document.getElementById('new-reward-desc').value = '';
@@ -514,7 +674,6 @@ window.addNewPunishment = function() {
         description: desc,
     });
 
-    // Clear form
     document.getElementById('new-punishment-title').value = '';
     document.getElementById('new-punishment-desc').value = '';
 
@@ -547,15 +706,13 @@ window.completeHabit = function(index) {
     const habit = gameState.habits[index];
     if (!habit) return;
 
-    const player = habit.assignee; // 'keeper' or 'nightingale'
+    const player = habit.assignee;
     const otherPlayer = player === 'keeper' ? 'nightingale' : 'keeper';
     const points = habit.points;
 
     const newState = JSON.parse(JSON.stringify(gameState));
-    // Reward the *other* player, as they are the one benefiting/tracking this
     newState.scores[otherPlayer] += points; 
     
-    // History message should reflect who gained the points
     const gainerTitle = newState.players[otherPlayer].title;
     const assigneeTitle = newState.players[player].title;
     const historyMessage = `The ${assigneeTitle} completed Habit: "${habit.description}". The ${gainerTitle} gained ${points} points.`;
@@ -567,7 +724,6 @@ window.claimReward = function(index) {
     const reward = gameState.rewards[index];
     if (!reward) return;
 
-    // This prompt asks the user who is claiming it and who is fulfilling it.
     showModal("Claim Reward", "Which player is claiming this reward? (Enter 'keeper' or 'nightingale')", true, '').then(claimerInput => {
         if (!claimerInput) return;
         
@@ -601,18 +757,14 @@ window.activeTab = 'habits';
 
 window.setActiveTab = function(tabName) {
     window.activeTab = tabName;
-    // Hide all content
     document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
-    // De-select all tabs
     document.querySelectorAll('[id^="tab-"]').forEach(el => {
         el.classList.remove('tab-active');
         el.classList.add('tab-inactive');
     });
 
-    // Show selected content
     document.getElementById(`content-${tabName}`).classList.remove('hidden');
     
-    // Highlight selected tab
     const tabBtn = document.getElementById(`tab-${tabName}`);
     tabBtn.classList.remove('tab-inactive');
     tabBtn.classList.add('tab-active');
@@ -651,13 +803,9 @@ window.togglePunishmentForm = function(forceShow = null) {
     }
 }
 
-/**
- * Fills the Add New Habit form with random example data.
- * @param {('keeper'|'nightingale')} type - The role to assign the example to.
- */
 window.fillHabitForm = function(type) {
     if (!window.EXAMPLE_DATABASE) {
-        window.alert("Example database not loaded.");
+        window.alert("Example database not loaded. Please check examples.js.");
         return;
     }
     const examples = EXAMPLE_DATABASE.habits.filter(h => h.type === type);
@@ -667,18 +815,15 @@ window.fillHabitForm = function(type) {
     
     document.getElementById('new-habit-desc').value = example.description;
     document.getElementById('new-habit-points').value = example.points;
-    document.getElementById('new-habit-times').value = 1; // Default to 1
+    document.getElementById('new-habit-times').value = 1;
     document.getElementById('new-habit-assignee').value = example.type;
     
     if (document.getElementById('habit-form').classList.contains('hidden')) { window.toggleHabitForm(true); }
 }
 
-/**
- * Fills the Add New Reward form with random example data.
- */
 window.fillRewardForm = function() {
     if (!window.EXAMPLE_DATABASE) {
-        window.alert("Example database not loaded.");
+        window.alert("Example database not loaded. Please check examples.js.");
         return;
     }
     const examples = EXAMPLE_DATABASE.rewards;
@@ -693,12 +838,9 @@ window.fillRewardForm = function() {
     if (document.getElementById('reward-form').classList.contains('hidden')) { window.toggleRewardForm(true); }
 }
 
-/**
- * Fills the Add New Punishment form with random example data.
- */
 window.fillPunishmentForm = function() {
     if (!window.EXAMPLE_DATABASE) {
-        window.alert("Example database not loaded.");
+        window.alert("Example database not loaded. Please check examples.js.");
         return;
     }
     const examples = EXAMPLE_DATABASE.punishments;
@@ -713,6 +855,4 @@ window.fillPunishmentForm = function() {
 }
 
 // --- Initialization ---
-
-// Run initialization on load
 window.onload = initFirebase;

@@ -12,53 +12,151 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
     <style>
-        /* --- Base Styles --- */
+        /* * === CSS Custom Properties ===
+         * All theme colors are now controlled by these variables,
+         * which are set dynamically from JavaScript based on settings.
+         */
+        :root {
+            --color-bg-start: #000000;
+            --color-bg-end: #1a1a1c;
+            --color-card-bg: #1a1a1c;
+            --color-text-base: #e0e0e0;
+            --color-text-muted: #9ca3af;
+            --color-accent-primary: #b05c6c;
+            --color-accent-secondary: #7f00ff;
+            --color-accent-secondary-hover: #4d0099;
+            --color-score: #ff9900;
+            --color-border-light: #555555;
+            --color-border-dark: #3c3c45;
+            --color-input-bg: #0d0d0f;
+            --color-shadow-primary: rgba(176, 92, 108, 0.2);
+            --color-shadow-secondary: rgba(127, 0, 255, 0.1);
+        }
+
+        /* === Base & Gradient Background === */
         body {
             font-family: 'Cormorant Garamond', serif;
-            transition: background-color 0.3s ease, color 0.3s ease;
+            /* Gradient background */
+            background-image: linear-gradient(to bottom, var(--color-bg-start), var(--color-bg-end));
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            color: var(--color-text-base);
             min-height: 100vh;
             margin: 0;
             padding: 0;
             overflow-x: hidden;
+            transition: color 0.3s ease, background-image 0.3s ease;
         }
-        h1, h2, h3 {
+        h1, h2, h3, h4 {
             font-family: 'Cinzel', serif;
-            transition: color 0.3s ease, text-shadow 0.3s ease;
+            color: var(--color-accent-primary);
+            transition: color 0.3s ease;
         }
+
+        /* === Card Styling === */
         .card {
+            background-color: var(--color-card-bg);
+            border: 2px solid var(--color-border-light);
             border-radius: 8px;
+            box-shadow: 0 0 15px var(--color-shadow-primary), 0 0 25px var(--color-shadow-secondary);
             transition: all 0.3s ease-in-out;
-            border-width: 2px; /* Default border width */
         }
+        .card:hover {
+            box-shadow: 0 0 20px var(--color-shadow-primary), 0 0 40px var(--color-shadow-secondary);
+            transform: translateY(-2px);
+        }
+
+        /* === Glowing Button === */
         .glowing-btn {
-            border: 1px solid;
+            background: var(--color-accent-secondary);
+            color: var(--color-text-base);
+            border: 1px solid var(--color-accent-secondary);
+            box-shadow: 0 0 5px var(--color-accent-secondary), 0 0 10px var(--color-accent-secondary);
             transition: all 0.3s ease-in-out;
-            text-shadow: 0 0 3px #fff;
+            /* Dark glow/outline for text */
+            text-shadow: 0 0 4px rgba(0,0,0,0.7);
         }
         .glowing-btn:hover {
+            background: var(--color-accent-secondary-hover);
+            box-shadow: 0 0 10px var(--color-accent-secondary), 0 0 20px var(--color-accent-secondary);
             transform: scale(1.02);
         }
         .glowing-btn:active {
             transform: scale(0.98);
         }
+
+        /* === Player Scores & Titles === */
         .player-score {
             font-family: 'Cinzel', serif;
             font-size: 2.5rem;
+            color: var(--color-score);
+            text-shadow: 0 0 5px var(--color-score);
             transition: color 0.3s ease, text-shadow 0.3s ease;
         }
+        /* Neon glow only for the default theme's primary color */
+        @keyframes neon-glow {
+            0%, 100% { text-shadow: 0 0 5px #b05c6c, 0 0 10px #7f00ff, 0 0 15px #b05c6c; }
+            50% { text-shadow: 0 0 10px #ff004c, 0 0 20px #ff004c, 0 0 30px #7f00ff; }
+        }
+        .neon-title {
+            animation: none; /* Disabled by default */
+        }
+        /* Only apply animation if the accent is the 'Nightingale' default */
+        html[data-theme="Nightingale"] .neon-title {
+             animation: neon-glow 5s ease-in-out infinite alternate;
+        }
+
+        /* === Edit & Tab Buttons === */
+        .edit-btn {
+            color: var(--color-text-muted);
+            opacity: 0.7;
+            transition: all 0.2s;
+            cursor: pointer; background: none; border: none;
+            padding: 0; margin-left: 0.5rem; line-height: 1;
+        }
+        .edit-btn:hover {
+            opacity: 1;
+            color: var(--color-text-base);
+            transform: scale(1.1);
+        }
+        .tab-btn {
+            border-bottom-width: 2px;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .tab-active {
+            border-color: var(--color-accent-primary);
+            color: var(--color-text-base);
+        }
+        .tab-inactive {
+            border-color: transparent;
+            color: var(--color-text-muted);
+        }
+        .tab-inactive:hover {
+            color: var(--color-text-base);
+        }
+
+        /* === Form & Input Styling === */
         input[type="text"], input[type="number"], textarea, select {
+            background-color: var(--color-input-bg);
+            border: 1px solid var(--color-border-light);
+            color: var(--color-text-base);
             border-radius: 4px;
             padding: 8px;
             transition: border-color 0.2s, background-color 0.3s, color 0.3s;
+        }
+        input:focus, textarea:focus, select:focus {
+            border-color: var(--color-accent-secondary);
+            outline: none;
+            box-shadow: 0 0 5px var(--color-accent-secondary);
         }
         input[type="color"] {
             -webkit-appearance: none;
             -moz-appearance: none;
             appearance: none;
             width: 100%;
-            height: 2.5rem;
+            height: 2.5rem; /* 40px */
             padding: 0;
-            border: 1px solid #555555;
+            border: 1px solid var(--color-border-light);
             border-radius: 4px;
             background: transparent;
             cursor: pointer;
@@ -71,204 +169,9 @@
             border: none;
             border-radius: 4px;
         }
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-        }
-
-        /* --- Theme: Nightingale (Default Goth) --- */
-        body.theme-goth {
-            background-color: #000000; /* True Black */
-            color: #e0e0e0; /* Faint Silver text */
-        }
-        .theme-goth h1, .theme-goth h2, .theme-goth h3 {
-            color: #b05c6c; /* Deep Crimson */
-            text-shadow: 0 0 5px #b05c6c, 0 0 10px #7f00ff55; /* Crimson/Violet glow */
-        }
-        .theme-goth .card {
-            background-color: #1a1a1c; /* Deep Charcoal */
-            border-color: #555555;
-            box-shadow: 0 0 15px rgba(176, 92, 108, 0.2), 0 0 25px rgba(127, 0, 255, 0.1);
-        }
-        .theme-goth .card:hover {
-            box-shadow: 0 0 20px rgba(176, 92, 108, 0.4), 0 0 40px rgba(127, 0, 255, 0.2);
-            transform: translateY(-2px);
-        }
-        .theme-goth .glowing-btn {
-            background: #28004d; /* Deep Violet */
-            color: #ffffff;
-            border-color: #7f00ff;
-            box-shadow: 0 0 5px #7f00ff, 0 0 10px #7f00ffcc;
-        }
-        .theme-goth .glowing-btn:hover {
-            background: #4d0099;
-            box-shadow: 0 0 10px #7f00ff, 0 0 20px #7f00ff, 0 0 30px #7f00ffaa;
-        }
-        .theme-goth .player-score {
-            color: #ff9900; /* Gold/Amber glow */
-            text-shadow: 0 0 5px #ff9900, 0 0 10px #cc7a00;
-        }
-        .theme-goth input, .theme-goth textarea, .theme-goth select {
-            background-color: #0d0d0f;
-            border: 1px solid #555555;
-            color: #e0e0e0;
-        }
-        .theme-goth input:focus, .theme-goth textarea:focus, .theme-goth select:focus {
-            border-color: #7f00ff;
-            box-shadow: 0 0 5px rgba(127, 0, 255, 0.5);
-        }
-        .theme-goth .tab-active {
-            border-color: #b05c6c; /* Crimson */
-            color: #ffffff;
-        }
-        .theme-goth .tab-inactive {
-            border-color: transparent;
-            color: #9ca3af; /* gray-400 */
-        }
-        .theme-goth .tab-inactive:hover {
-            color: #ffffff;
-        }
-
-        /* --- Theme: Daybreak (Light) --- */
-        body.theme-light {
-            background-color: #f3f4f6; /* gray-100 */
-            color: #1f2937; /* gray-800 */
-        }
-        .theme-light h1, .theme-light h2, .theme-light h3 {
-            color: #4f46e5; /* Indigo-600 */
-            text-shadow: none;
-        }
-        .theme-light .card {
-            background-color: #ffffff;
-            border-color: #e5e7eb; /* gray-200 */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-        }
-        .theme-light .card:hover {
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            transform: translateY(-2px);
-        }
-        .theme-light .glowing-btn {
-            background: #4f46e5; /* Indigo-600 */
-            color: #ffffff;
-            border-color: #4338ca; /* Indigo-700 */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .theme-light .glowing-btn:hover {
-            background: #4338ca; /* Indigo-700 */
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .theme-light .player-score {
-            color: #3730a3; /* Indigo-800 */
-            text-shadow: none;
-        }
-        .theme-light input, .theme-light textarea, .theme-light select {
-            background-color: #f9fafb; /* gray-50 */
-            border: 1px solid #d1d5db; /* gray-300 */
-            color: #1f2937;
-        }
-        .theme-light input:focus, .theme-light textarea:focus, .theme-light select:focus {
-            border-color: #4f46e5; /* Indigo-600 */
-            box-shadow: 0 0 5px rgba(79, 70, 229, 0.5);
-        }
-        .theme-light .tab-active {
-            border-color: #4f46e5; /* Indigo-600 */
-            color: #1f2937; /* gray-800 */
-        }
-        .theme-light .tab-inactive {
-            border-color: transparent;
-            color: #6b7280; /* gray-500 */
-        }
-        .theme-light .tab-inactive:hover {
-            color: #1f2937;
-        }
-
-        /* --- Theme: Grove (Green) --- */
-        body.theme-forest {
-            background-color: #181c18; /* Dark Green-Gray */
-            color: #d4d4d8; /* zinc-300 */
-        }
-        .theme-forest h1, .theme-forest h2, .theme-forest h3 {
-            color: #65a30d; /* Lime-600 */
-            text-shadow: 0 0 5px #a3e63555; /* Lime-400 glow */
-        }
-        .theme-forest .card {
-            background-color: #202620; /* Darker Green-Gray */
-            border-color: #3f6212; /* Lime-800 */
-            box-shadow: 0 0 15px rgba(101, 163, 13, 0.2);
-        }
-        .theme-forest .card:hover {
-            box-shadow: 0 0 20px rgba(101, 163, 13, 0.4);
-            transform: translateY(-2px);
-        }
-        .theme-forest .glowing-btn {
-            background: #3f6212; /* Lime-800 */
-            color: #ffffff;
-            border-color: #a3e635; /* Lime-400 */
-            box-shadow: 0 0 5px #a3e635, 0 0 10px #a3e635cc;
-        }
-        .theme-forest .glowing-btn:hover {
-            background: #4d7c0f; /* Lime-700 */
-            box-shadow: 0 0 10px #a3e635, 0 0 20px #a3e635;
-        }
-        .theme-forest .player-score {
-            color: #a3e635; /* Lime-400 */
-            text-shadow: 0 0 5px #a3e635, 0 0 10px #84cc16;
-        }
-        .theme-forest input, .theme-forest textarea, .theme-forest select {
-            background-color: #1a201a;
-            border: 1px solid #3f6212;
-            color: #d4d4d8;
-        }
-        .theme-forest input:focus, .theme-forest textarea:focus, .theme-forest select:focus {
-            border-color: #a3e635;
-            box-shadow: 0 0 5px rgba(163, 230, 53, 0.5);
-        }
-        .theme-forest .tab-active {
-            border-color: #65a30d; /* Lime-600 */
-            color: #ffffff;
-        }
-        .theme-forest .tab-inactive {
-            border-color: transparent;
-            color: #a1a1aa; /* zinc-400 */
-        }
-        .theme-forest .tab-inactive:hover {
-            color: #ffffff;
-        }
-
-
-        /* Animated Title Text (Shared) */
-        @keyframes neon-glow {
-            0%, 100% { text-shadow: 0 0 5px #b05c6c, 0 0 10px #7f00ff, 0 0 15px #b05c6c; }
-            50% { text-shadow: 0 0 10px #ff004c, 0 0 20px #ff004c, 0 0 30px #7f00ff; }
-        }
-        .theme-goth .neon-title {
-            animation: neon-glow 5s ease-in-out infinite alternate;
-        }
-        /* Disable neon glow on other themes */
-        .theme-light .neon-title, .theme-forest .neon-title {
-            animation: none;
-        }
-
-
-        /* Edit Button Styling (Shared) */
-        .edit-btn {
-            color: #9ca3af; /* gray-400 */
-            opacity: 0.7;
-            transition: all 0.2s;
-            cursor: pointer;
-            background: none;
-            border: none;
-            padding: 0;
-            margin-left: 0.5rem;
-            line-height: 1;
-        }
-        .edit-btn:hover {
-            opacity: 1;
-            color: #ffffff;
-            transform: scale(1.1);
-        }
     </style>
 </head>
-<body class="p-4 sm:p-8 theme-goth"> <!-- Default theme class -->
+<body class="p-4 sm:p-8">
 
     <!-- Modal for Alerts and Prompts -->
     <div id="custom-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300">
@@ -283,28 +186,64 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
+    <!-- Settings Modal (Redesigned) -->
     <div id="settings-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300">
-        <div class="card p-6 w-11/12 max-w-lg space-y-4">
-            <h3 class="text-xl font-bold border-b pb-2 border-gray-700">Settings</h3>
+        <div class="card p-6 w-11/12 max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold border-b pb-2 border-gray-700">Theme &amp; Customization</h3>
             
-            <!-- Theme Selection -->
+            <!-- Theme Preset Selection -->
             <div class="space-y-2">
-                <label for="theme-select" class="block text-sm font-medium">Select Theme</label>
-                <select id="theme-select" class="w-full">
-                    <option value="theme-goth">Nightingale (Default)</option>
-                    <option value="theme-light">Daybreak (Light)</option>
-                    <option value="theme-forest">Grove (Green)</option>
+                <label for="theme-preset-select" class="block text-sm font-medium">Theme Preset</label>
+                <select id="theme-preset-select" class="w-full" onchange="window.handlePresetChange()">
+                    <option value="Nightingale">Nightingale (Dark)</option>
+                    <option value="Daybreak">Daybreak (Light)</option>
+                    <option value="Grove">Grove (Green)</option>
+                    <option value="Custom">Custom</option>
                 </select>
+                <p class="text-xs text-gray-400">Select a preset to load colors, or customize them below (sets to 'Custom').</p>
             </div>
-            <!-- Future settings can be added here -->
 
-            <div class="flex justify-end space-x-4">
+            <!-- In-Depth Color Customization -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                <!-- Color pickers. oninput sets preset to 'Custom' -->
+                <div class="space-y-2">
+                    <label for="color-bg-start" class="block text-sm font-medium">Background Start</label>
+                    <input type="color" id="color-bg-start" class="w-full" oninput="window.setPresetToCustom()">
+                </div>
+                <div class="space-y-2">
+                    <label for="color-bg-end" class="block text-sm font-medium">Background End</label>
+                    <input type="color" id="color-bg-end" class="w-full" oninput="window.setPresetToCustom()">
+                </div>
+                <div class="space-y-2">
+                    <label for="color-card-bg" class="block text-sm font-medium">Card Background</label>
+                    <input type="color" id="color-card-bg" class="w-full" oninput="window.setPresetToCustom()">
+                </div>
+                <div class="space-y-2">
+                    <label for="color-text-base" class="block text-sm font-medium">Base Text</label>
+                    <input type="color" id="color-text-base" class="w-full" oninput="window.setPresetToCustom()">
+                </div>
+                <div class="space-y-2">
+                    <label for="color-accent-primary" class="block text-sm font-medium">Primary Accent (Headers)</label>
+                    <input type="color" id="color-accent-primary" class="w-full" oninput="window.setPresetToCustom()">
+                </div>
+                <div class="space-y-2">
+                    <label for="color-accent-secondary" class="block text-sm font-medium">Secondary Accent (Buttons)</label>
+                    <input type="color" id="color-accent-secondary" class="w-full" oninput="window.setPresetToCustom()">
+                </div>
+                <div class="space-y-2">
+                    <label for="color-score" class="block text-sm font-medium">Score Text</label>
+                    <input type="color" id="color-score" class="w-full" oninput="window.setPresetToCustom()">
+                </div>
+                <!-- Add more color pickers here if needed -->
+            </div>
+
+            <div class="flex justify-end space-x-4 pt-4">
                 <button onclick="window.closeSettingsModal()" class="glowing-btn px-4 py-2 text-sm rounded">Cancel</button>
                 <button onclick="window.saveSettings()" class="glowing-btn px-4 py-2 text-sm rounded">Save</button>
             </div>
         </div>
     </div>
+
 
     <!-- Edit Profile Modal -->
     <div id="profile-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300">
@@ -337,10 +276,11 @@
         
         <!-- Header -->
         <header class="text-center py-6 mb-8 relative">
-            <h1 class="text-5xl sm:text-7xl font-bold neon-title mb-4">The Nightingale Ledger</h1>
+            <!-- Mobile-friendly text size -->
+            <h1 class="text-4xl sm:text-6xl font-bold neon-title mb-4">The Nightingale Ledger</h1>
             <p class="text-lg italic text-gray-400">A Shared Vow of Discipline and Delight</p>
             <!-- Settings Button -->
-            <button onclick="window.openSettingsModal()" class="absolute top-4 right-4 glowing-btn p-3 rounded-full text-xl leading-none">
+            <button onclick="window.openSettingsModal()" class="absolute top-4 right-0 sm:right-4 glowing-btn p-3 rounded-full text-xl leading-none">
                 <i class="fas fa-cog"></i>
             </button>
         </header>
@@ -376,27 +316,29 @@
             </div>
         </section>
         
-        <!-- Tabbed Interface for Habits, Rewards, Punishments, History -->
+        <!-- Tabbed Interface -->
         <div class="mb-12">
             <div class="flex border-b border-[#555]">
-                <button onclick="window.setActiveTab('habits')" id="tab-habits" class="flex-1 py-3 text-lg font-semibold border-b-2">Habits</button>
-                <button onclick="window.setActiveTab('rewards')" id="tab-rewards" class="flex-1 py-3 text-lg font-semibold border-b-2">Rewards</button>
-                <button onclick="window.setActiveTab('punishments')" id="tab-punishments" class="flex-1 py-3 text-lg font-semibold border-b-2">Punishments</button>
-                <button onclick="window.setActiveTab('history')" id="tab-history" class="flex-1 py-3 text-lg font-semibold border-b-2">History</button>
+                <!-- Mobile-friendly text size -->
+                <button onclick="window.setActiveTab('habits')" id="tab-habits" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold">Habits</button>
+                <button onclick="window.setActiveTab('rewards')" id="tab-rewards" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold">Rewards</button>
+                <button onclick="window.setActiveTab('punishments')" id="tab-punishments" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold">Punishments</button>
+                <button onclick="window.setActiveTab('history')" id="tab-history" class="tab-btn flex-1 py-3 text-base sm:text-lg font-semibold">History</button>
             </div>
 
             <!-- Habits Tab Content -->
-            <section id="content-habits" class="p-6 space-y-6">
-                <div class="flex justify-between items-center">
+            <section id="content-habits" class="p-2 sm:p-6 space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
                     <h3 class="text-2xl">Habit Registry</h3>
-                    <button onclick="window.toggleHabitForm()" class="glowing-btn px-4 py-2 rounded text-sm"><i class="fas fa-plus mr-2"></i> Add New Habit</button>
+                    <button onclick="window.toggleHabitForm()" class="glowing-btn px-4 py-2 rounded text-sm w-full sm:w-auto"><i class="fas fa-plus mr-2"></i> Add New Habit</button>
                 </div>
 
                 <!-- New Habit Form -->
-                <div id="habit-form" class="card p-4 space-y-4 hidden border-purple-500/50">
+                <div id="habit-form" class="card p-4 space-y-4 hidden">
                     <h4 class="text-xl">Define a New Habit</h4>
-                    <input type="text" id="new-habit-desc" placeholder="Habit Description (e.g., Meditate for 10 minutes)" class="w-full">
-                    <div class="grid grid-cols-2 gap-4">
+                    <input type="text" id="new-habit-desc" placeholder="Habit Description..." class="w-full">
+                    <!-- Mobile-friendly grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <input type="number" id="new-habit-points" placeholder="Points (e.g., 10)" min="1" class="w-full">
                         <input type="number" id="new-habit-times" placeholder="Times Per Week (e.g., 3)" min="1" max="7" class="w-full">
                     </div>
@@ -405,7 +347,8 @@
                         <option value="keeper">The Keeper</option>
                         <option value="nightingale">The Nightingale</option>
                     </select>
-                    <div class="flex justify-between space-x-4">
+                    <!-- Mobile-friendly button layout -->
+                    <div class="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-4">
                          <button onclick="window.fillHabitForm('keeper')" class="glowing-btn px-3 py-1 rounded text-xs bg-red-800 border-red-500"><i class="fas fa-magic"></i> Keeper Example</button>
                         <button onclick="window.fillHabitForm('nightingale')" class="glowing-btn px-3 py-1 rounded text-xs bg-purple-800 border-purple-500"><i class="fas fa-magic"></i> Nightingale Example</button>
                         <button onclick="window.addNewHabit()" class="glowing-btn px-4 py-2 rounded bg-green-800 border-green-500">Save Habit</button>
@@ -419,21 +362,19 @@
             </section>
 
             <!-- Rewards Tab Content -->
-            <section id="content-rewards" class="p-6 space-y-6 hidden">
-                <div class="flex justify-between items-center">
+            <section id="content-rewards" class="p-2 sm:p-6 space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
                     <h3 class="text-2xl">Reward Catalog</h3>
-                    <button onclick="window.toggleRewardForm()" class="glowing-btn px-4 py-2 rounded text-sm"><i class="fas fa-plus mr-2"></i> Add New Reward</button>
+                    <button onclick="window.toggleRewardForm()" class="glowing-btn px-4 py-2 rounded text-sm w-full sm:w-auto"><i class="fas fa-plus mr-2"></i> Add New Reward</button>
                 </div>
                 
                 <!-- New Reward Form -->
-                <div id="reward-form" class="card p-4 space-y-4 hidden border-purple-500/50">
+                <div id="reward-form" class="card p-4 space-y-4 hidden">
                     <h4 class="text-xl">Define a New Reward</h4>
-                    <input type="text" id="new-reward-title" placeholder="Reward Title (e.g., Movie Night)" class="w-full">
-                    <div class="grid grid-cols-2 gap-4">
-                        <input type="number" id="new-reward-cost" placeholder="Point Cost (e.g., 50)" min="1" class="w-full">
-                    </div>
-                    <textarea id="new-reward-desc" placeholder="Reward Description (e.g., Two hours of uninterrupted gaming or a chosen movie)." class="w-full h-24"></textarea>
-                    <div class="flex justify-between space-x-4">
+                    <input type="text" id="new-reward-title" placeholder="Reward Title..." class="w-full">
+                    <input type="number" id="new-reward-cost" placeholder="Point Cost (e.g., 50)" min="1" class="w-full">
+                    <textarea id="new-reward-desc" placeholder="Reward Description..." class="w-full h-24"></textarea>
+                    <div class="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-4">
                         <button onclick="window.fillRewardForm()" class="glowing-btn px-3 py-1 rounded text-xs bg-purple-800 border-purple-500"><i class="fas fa-magic"></i> Generate Example</button>
                         <button onclick="window.addNewReward()" class="glowing-btn px-4 py-2 rounded bg-green-800 border-green-500">Save Reward</button>
                     </div>
@@ -446,18 +387,18 @@
             </section>
 
             <!-- Punishments Tab Content -->
-            <section id="content-punishments" class="p-6 space-y-6 hidden">
-                <div class="flex justify-between items-center">
+            <section id="content-punishments" class="p-2 sm:p-6 space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
                     <h3 class="text-2xl">Vows of Consequence</h3>
-                    <button onclick="window.togglePunishmentForm()" class="glowing-btn px-4 py-2 rounded text-sm"><i class="fas fa-plus mr-2"></i> Add New Punishment</button>
+                    <button onclick="window.togglePunishmentForm()" class="glowing-btn px-4 py-2 rounded text-sm w-full sm:w-auto"><i class="fas fa-plus mr-2"></i> Add New Punishment</button>
                 </div>
 
                 <!-- New Punishment Form -->
-                <div id="punishment-form" class="card p-4 space-y-4 hidden border-red-500/50">
+                <div id="punishment-form" class="card p-4 space-y-4 hidden">
                     <h4 class="text-xl">Define a New Punishment</h4>
-                    <input type="text" id="new-punishment-title" placeholder="Punishment Title (e.g., The Dusting Detail)" class="w-full">
-                    <textarea id="new-punishment-desc" placeholder="Punishment Description (e.g., The failure must meticulously dust every surface in the living area)." class="w-full h-24"></textarea>
-                    <div class="flex justify-between space-x-4">
+                    <input type="text" id="new-punishment-title" placeholder="Punishment Title..." class="w-full">
+                    <textarea id="new-punishment-desc" placeholder="Punishment Description..." class="w-full h-24"></textarea>
+                    <div class="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-4">
                         <button onclick="window.fillPunishmentForm()" class="glowing-btn px-3 py-1 rounded text-xs bg-red-800 border-red-500"><i class="fas fa-magic"></i> Generate Example</button>
                         <button onclick="window.addNewPunishment()" class="glowing-btn px-4 py-2 rounded bg-green-800 border-green-500">Save Punishment</button>
                     </div>
@@ -470,7 +411,7 @@
             </section>
 
             <!-- History Tab Content (Moved) -->
-            <section id="content-history" class="p-6 space-y-6 hidden">
+            <section id="content-history" class="p-2 sm:p-6 space-y-6 hidden">
                 <h3 class="text-2xl text-center">Ledger History</h3>
                 <div class="card p-6 h-96 overflow-y-auto"> <!-- Increased height -->
                     <ul id="history-list" class="space-y-3">
